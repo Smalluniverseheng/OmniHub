@@ -134,5 +134,5 @@ const Store = (() => {
     return result;
   }
 
-  return { state, save, patch, reset, exportData, importData, deepClone };
+  return { get state() { return state; }, save, patch, reset, exportData, importData, deepClone };
 })();
