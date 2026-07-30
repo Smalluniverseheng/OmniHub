@@ -213,9 +213,12 @@ const ProfileModule = (() => {
     // 关于
     html += '<div class="settings-group">';
     html += '<div class="settings-group-title">' + t('about') + '</div>';
+    html += '<div class="settings-row" data-sub="subChangelog">';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">📋</div><span class="settings-row-text">更新日志</span></div>';
+    html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div></div>';
     html += '<div class="settings-row">';
     html += '<div class="settings-row-left"><div class="settings-row-icon">📦</div><span class="settings-row-text">OmniHub</span></div>';
-    html += '<div class="settings-row-right">v7.3</div></div>';
+    html += '<div class="settings-row-right">v7.4</div></div>';
     html += '</div>';
 
     body.innerHTML = html;
@@ -224,6 +227,29 @@ const ProfileModule = (() => {
     renderModuleManage();
     renderDataManage();
     renderGlobalSettings();
+    renderChangelog();
+  }
+
+  function renderChangelog() {
+    var body = document.getElementById('changelogBody');
+    if (!body) return;
+    if (typeof CHANGELOG === 'undefined' || !CHANGELOG.length) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">暂无更新日志</div></div>';
+      return;
+    }
+    var list = CHANGELOG.slice().reverse();
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      html += '<div class="changelog-card">';
+      html += '<div class="changelog-head"><span class="changelog-ver">v' + item.version + '</span><span class="changelog-date">' + item.date + '</span></div>';
+      html += '<ul class="changelog-list">';
+      for (var j = 0; j < item.changes.length; j++) {
+        html += '<li>' + item.changes[j] + '</li>';
+      }
+      html += '</ul></div>';
+    }
+    body.innerHTML = html;
   }
 
   function getPageName(id) {
