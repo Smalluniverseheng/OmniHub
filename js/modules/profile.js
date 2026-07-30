@@ -218,7 +218,7 @@ const ProfileModule = (() => {
     html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div></div>';
     html += '<div class="settings-row">';
     html += '<div class="settings-row-left"><div class="settings-row-icon">📦</div><span class="settings-row-text">OmniHub</span></div>';
-    html += '<div class="settings-row-right">v7.4</div></div>';
+    html += '<div class="settings-row-right">v7.6</div></div>';
     html += '</div>';
 
     body.innerHTML = html;
