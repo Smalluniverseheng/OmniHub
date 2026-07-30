@@ -343,16 +343,33 @@ const ReadModule = (() => {
     const chapterIdx = shelfBook ? (shelfBook.chapterIdx || 0) : 0;
     const pageIdx = shelfBook ? (shelfBook.pageIdx || 0) : 0;
 
-    // 打开阅读器
-    Reader.open({
-      title: book.title,
-      url: book.url,
-      source: book.source,
-      sourceType: src.type,
-      chapters: chapters,
-      currentChapter: chapterIdx,
-      currentPage: pageIdx
-    });
+    // 根据类型选择阅读器
+    if (book.type === 'novel' || src.mediaType === 'novel') {
+      // 小说阅读器
+      if (typeof NovelReader !== 'undefined') {
+        NovelReader.open({
+          title: book.title,
+          url: book.url,
+          source: book.source,
+          sourceType: src.type,
+          chapters: chapters,
+          currentChapter: chapterIdx
+        });
+      } else {
+        Toast.show('小说阅读器未加载', 'error');
+      }
+    } else {
+      // 漫画阅读器
+      Reader.open({
+        title: book.title,
+        url: book.url,
+        source: book.source,
+        sourceType: src.type,
+        chapters: chapters,
+        currentChapter: chapterIdx,
+        currentPage: pageIdx
+      });
+    }
   }
 
   async function fetchChaptersCss(url, src) {
