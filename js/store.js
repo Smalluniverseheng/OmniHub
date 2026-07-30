@@ -67,9 +67,19 @@ const Store = (() => {
       username: '',
       email: '',
       token: '',
-      memberLevel: 0,   // 0=免费, 1=普通会员, 2=高级会员
+      memberLevel: 0,   // 0=免费, 1=普通会员, 2=高级会员（旧字段兼容）
       memberExpire: 0,
-      cloudSync: false
+      cloudSync: false,
+      id: '',              // Supabase 用户 ID
+      nickname: '',
+      role: 'guest',       // guest/user/advanced/vip/agent/admin
+      plan: '',
+      planExpiresAt: 0,
+      balance: 0,
+      storageUsedMb: 0,
+      storageQuotaMb: 0,
+      isAdmin: false,
+      lastSyncAt: 0
     },
 
     // 全局设置
