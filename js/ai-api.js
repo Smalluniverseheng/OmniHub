@@ -242,5 +242,61 @@ const AIAPI = (() => {
     throw new Error('图片生成返回格式异常');
   }
 
-  return { chat, chatSync, generateImage };
+  // Key 有效性检测：拉取该厂商 models 列表验证
+  // provider 可为 keySlug 或 provider 对象；customBase 可选（覆盖官方地址）
+  // 返回 { ok, models?: [...], error? }
+  async function validateKey(provider, apiKey, customBase) {
+    var p = typeof provider === 'string' ? AIProviders.get(provider) : provider;
+    if (!p) return { ok: false, error: '未知厂商' };
+    var key = String(apiKey || '').trim();
+    if (!key) return { ok: false, error: '请填写 API Key' };
+    var base = String(customBase || p.base || '').replace(/\/+$/, '');
+    if (!base) return { ok: false, error: '请填写接口地址' };
+
+    var url;
+    var headers = {};
+    if (p.format === 'anthropic') {
+      url = base + '/v1/models';
+      headers['x-api-key'] = key;
+      headers['anthropic-version'] = '2023-06-01';
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    } else if (p.format === 'google') {
+      url = base + '/v1beta/models?key=' + encodeURIComponent(key);
+    } else {
+      // openai 兼容：base 已含 /v3、/v4 等版本路径时直接拼 /models
+      url = /\/v\d+$/.test(base) ? base + '/models' : base + '/v1/models';
+      headers['Authorization'] = 'Bearer ' + key;
+    }
+
+    var ctrl = new AbortController();
+    var timer = setTimeout(function() { ctrl.abort(); }, 12000);
+    try {
+      var res = await fetch(url, { method: 'GET', headers: headers, signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        var text = '';
+        try { text = await res.text(); } catch (e) { /* ignore */ }
+        return { ok: false, error: 'HTTP ' + res.status + (text ? '：' + text.slice(0, 120) : '') };
+      }
+      var json = await res.json();
+      var models = [];
+      var i;
+      if (json && json.data) {
+        for (i = 0; i < json.data.length; i++) {
+          if (json.data[i] && json.data[i].id) models.push(json.data[i].id);
+        }
+      } else if (json && json.models) {
+        for (i = 0; i < json.models.length; i++) {
+          if (json.models[i] && json.models[i].name) models.push(json.models[i].name);
+        }
+      }
+      return { ok: true, models: models };
+    } catch (e) {
+      clearTimeout(timer);
+      var reason = (e && e.name === 'AbortError') ? '请求超时' : ((e && e.message) || '网络错误');
+      return { ok: false, error: reason };
+    }
+  }
+
+  return { chat, chatSync, generateImage, validateKey };
 })();
