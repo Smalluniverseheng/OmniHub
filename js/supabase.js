@@ -386,7 +386,75 @@ const SB = (() => {
     }
   }
 
-  const Sync = { schedulePush: schedulePush, syncNow: syncNow, firstSync: firstSync, pushNow: pushNow };
+  /* ---------- 阅读进度自动同步：书架（含 chapterIdx/pageIdx/lastRead）推送 ----------
+   * 远端无专用表时存 user_data 通用行；任何失败都降级为本地保存，不报错。
+   */
+  async function pushReadShelf() {
+    if (!canSync() || !Store.state.user.cloudSync) {
+      console.log('[SB] pushReadShelf 跳过（未登录或未开启云同步），阅读进度仅本地保存');
+      return { ok: false, skipped: true };
+    }
+    const uid = Store.state.user.id;
+    const shelf = (Store.state.read.shelf || []).map(function(b) {
+      return {
+        id: b.id, title: b.title, author: b.author, cover: b.cover,
+        type: b.type, url: b.url, source: b.source,
+        chapterIdx: b.chapterIdx, pageIdx: b.pageIdx,
+        chapterName: b.chapterName, lastRead: b.lastRead
+      };
+    });
+    try {
+      const r = await client.from('user_data').upsert(
+        { user_id: uid, key: 'read_shelf', data: shelf, updated_at: nowIso() },
+        { onConflict: 'user_id,key' }
+      );
+      if (r.error) {
+        console.warn('[SB] 书架推送失败（远端可能无 user_data 表），已仅本地保存:', r.error.message || r.error);
+        return { ok: false, error: r.error };
+      }
+      return { ok: true };
+    } catch (e) {
+      console.warn('[SB] 书架推送异常，已仅本地保存:', e);
+      return { ok: false, error: e };
+    }
+  }
+
+  const Sync = { schedulePush: schedulePush, syncNow: syncNow, firstSync: firstSync, pushNow: pushNow, pushReadShelf: pushReadShelf };
+
+  /* ==================== 设备错误日志上报 ====================
+   * 开关开启时把本地未上报日志 insert 到 error_logs 表；
+   * 表不存在/网络失败时静默保留本地（catch 不报错），成功后清空本地已上报。
+   */
+  async function uploadErrorLogs() {
+    if (!Store.state.settings.errorLogEnabled) return { ok: false, skipped: true };
+    if (!ready()) return { ok: false, error: new Error('sdk not ready') };
+    const logs = Store.state.errorLog || [];
+    if (!logs.length) return { ok: true, uploaded: 0 };
+    const uid = (Store.state.user && Store.state.user.id) || null;
+    const rows = logs.map(function(l) {
+      return {
+        user_id: uid,
+        message: String(l.message || '').slice(0, 1000),
+        stack: String(l.stack || '').slice(0, 4000),
+        version: l.version || '',
+        url: String(l.url || '').slice(0, 500),
+        time: l.time ? new Date(l.time).toISOString() : nowIso()
+      };
+    });
+    try {
+      const r = await client.from('error_logs').insert(rows);
+      if (r.error) {
+        console.warn('[SB] 错误日志上传失败（远端可能无 error_logs 表），已保留本地:', r.error.message || r.error);
+        return { ok: false, error: r.error };
+      }
+      Store.state.errorLog = [];
+      saveLocal();
+      return { ok: true, uploaded: rows.length };
+    } catch (e) {
+      console.warn('[SB] 错误日志上传异常，已保留本地:', e);
+      return { ok: false, error: e };
+    }
+  }
 
   /* ==================== 启动恢复 ====================
    * app 启动时调用：getSession 有效则自动恢复登录态 + 后台 firstSync（不阻塞首屏）
@@ -429,6 +497,8 @@ const SB = (() => {
     redeemCard: redeemCard,
     getMembership: getMembership,
     pullProfile: pullProfile,
+    pushReadShelf: pushReadShelf,
+    uploadErrorLogs: uploadErrorLogs,
     restoreSession: restoreSession,
     _deriveKey: deriveKey
   };

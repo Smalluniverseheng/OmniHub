@@ -94,7 +94,10 @@ const VeneraEngine = (() => {
     };
     try { return await tryFetch(url); }
     catch (e) {
-      const proxies = ['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?'];
+      const proxies = [
+        'https://api.allorigins.win/raw?url=',
+        'https://corsproxy.io/?'
+      ];
       for (const p of proxies) { try { return await tryFetch(p + encodeURIComponent(url)); } catch(_) {} }
       throw e;
     }
@@ -302,11 +305,111 @@ const VeneraEngine = (() => {
 
   function unload(sourceKey) { delete ComicSource.sources[sourceKey]; }
 
+  /* ---------- 网络 URL 下载书源（带进度回调） ----------
+   * onProgress(ratioOrNull, loadedBytes)：有 content-length 时传 0-1 比例，
+   * 无 content-length 时传 null（不确定态，仅累计字节数）。
+   */
+  async function loadSourceFromUrl(url, onProgress) {
+    url = String(url || '').trim();
+    if (!/^https?:/i.test(url)) throw new Error('请输入有效的 http(s) 地址');
+    const resp = await fetch(url, { credentials: 'omit' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
+    let text = '';
+    if (resp.body && typeof resp.body.getReader === 'function') {
+      const reader = resp.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      for (;;) {
+        const r = await reader.read();
+        if (r.done) break;
+        chunks.push(r.value);
+        loaded += r.value.length;
+        if (typeof onProgress === 'function') {
+          try { onProgress(total ? Math.min(0.99, loaded / total) : null, loaded); } catch (e) {}
+        }
+      }
+      const buf = new Uint8Array(loaded);
+      let off = 0;
+      for (const c of chunks) { buf.set(c, off); off += c.length; }
+      text = new TextDecoder().decode(buf);
+    } else {
+      text = await resp.text();
+    }
+    if (typeof onProgress === 'function') { try { onProgress(1, total || text.length); } catch (e) {} }
+    if (!text.trim()) throw new Error('下载内容为空');
+    const source = loadSource(text, 'venera_url_' + Date.now());
+    source._rawText = text;   // 供调用方持久化（重启后重新加载图源用）
+    return source;
+  }
+
+  /* ---------- 四步连通测试：搜索 → 详情 → 章节 → 图片 ----------
+   * 返回逐步结果数组 [{step, name, status:'pending'|'loading'|'ok'|'fail', msg}]，
+   * onUpdate(results) 在每次状态变化时回调，供 UI 逐行渲染。
+   * 某一步失败即终止，后续步骤保持 pending。
+   */
+  async function testSource(sourceKey, onUpdate) {
+    const results = [
+      { step: 1, name: '搜索', status: 'pending', msg: '' },
+      { step: 2, name: '详情', status: 'pending', msg: '' },
+      { step: 3, name: '章节', status: 'pending', msg: '' },
+      { step: 4, name: '图片', status: 'pending', msg: '' }
+    ];
+    const notify = () => {
+      if (typeof onUpdate === 'function') {
+        try { onUpdate(results.map(r => ({ step: r.step, name: r.name, status: r.status, msg: r.msg }))); } catch (e) {}
+      }
+    };
+    const run = async (idx, fn) => {
+      results[idx].status = 'loading';
+      notify();
+      try {
+        const out = await fn();
+        results[idx].status = 'ok';
+        results[idx].msg = out;
+        notify();
+        return true;
+      } catch (e) {
+        results[idx].status = 'fail';
+        results[idx].msg = (e && e.message) || '失败';
+        notify();
+        return false;
+      }
+    };
+
+    let comicId = null, epId = null;
+    if (!(await run(0, async () => {
+      const list = await search(sourceKey, 'a', {}, 1);
+      if (!list || !list.length) throw new Error('搜索无结果');
+      comicId = list[0].id;
+      return '找到 ' + list.length + ' 条结果';
+    }))) return results;
+
+    if (!(await run(1, async () => {
+      const det = await getComicDetails(sourceKey, comicId);
+      if (!det || !det.title) throw new Error('详情为空');
+      if (det.chapters && det.chapters.length) epId = det.chapters[0].url || det.chapters[0].id;
+      return det.title;
+    }))) return results;
+
+    if (!(await run(2, async () => {
+      if (!epId) throw new Error('该图源无章节数据');
+      return '章节可用';
+    }))) return results;
+
+    await run(3, async () => {
+      const imgs = await getImages(sourceKey, comicId, epId);
+      if (!imgs || !imgs.length) throw new Error('图片为空');
+      return imgs.length + ' 张图片';
+    });
+    return results;
+  }
+
   return {
     ComicSource, Network, HtmlDocument, HtmlElement, HtmlNode,
     UI, Convert, Cookie, Comic, ComicDetails, Comment, ImageLoadingConfig,
     createUuid, randomInt, randomDouble, fetch: fetchCompat,
-    loadSource, unload, listSources, verify,
+    loadSource, loadSourceFromUrl, testSource, unload, listSources, verify,
     search, explore, getComicDetails, getImages
   };
 })();

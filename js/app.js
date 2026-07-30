@@ -5,6 +5,32 @@ const App = (() => {
 
   let currentPage = 'profile';
 
+  /* ==================== 设备错误日志：全局捕获 ==================== */
+  function pushErrorLog(entry) {
+    try {
+      if (!Store.state.errorLog) Store.state.errorLog = [];
+      Store.state.errorLog.push({
+        message: String(entry.message || '').slice(0, 1000),
+        stack: String(entry.stack || '').slice(0, 4000),
+        version: (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
+        time: Date.now(),
+        url: String(entry.url || location.href || '').slice(0, 500)
+      });
+      if (Store.state.errorLog.length > 50) {
+        Store.state.errorLog = Store.state.errorLog.slice(-50);
+      }
+      Store.save();
+    } catch (e) {}
+  }
+
+  window.addEventListener('error', function(e) {
+    pushErrorLog({ message: e.message || 'Unknown error', stack: (e.error && e.error.stack) || '', url: e.filename || location.href });
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    var r = e.reason;
+    pushErrorLog({ message: (r && r.message) || String(r || 'Unhandled rejection'), stack: (r && r.stack) || '' });
+  });
+
   function init() {
     migrateLegacy();
 
@@ -40,6 +66,61 @@ const App = (() => {
 
     dismissSplash();
     checkVersionAnnouncement();
+    startReadProgressSync();
+    purgeExpiredTrash();
+    checkDisclaimer();
+  }
+
+  // 回收站 15 天过期自动清除（启动时做一次；阅读/对话各一份）
+  function purgeExpiredTrash() {
+    try {
+      if (typeof ReadModule !== 'undefined' && ReadModule.purgeExpiredTrash) ReadModule.purgeExpiredTrash();
+    } catch (e) { console.warn('[App] 阅读回收站清理跳过:', e); }
+    try {
+      if (typeof ChatModule !== 'undefined' && ChatModule.purgeChatTrash) ChatModule.purgeChatTrash();
+    } catch (e) { console.warn('[App] 对话回收站清理跳过:', e); }
+  }
+
+  // 首次打开免责声明：未同意则强制弹窗（底部滑出），同意后才能使用
+  function checkDisclaimer() {
+    if (Store.state.settings.disclaimerAgreed) return;
+    var text = (typeof DISCLAIMER_TEXT !== 'undefined') ? DISCLAIMER_TEXT : '';
+    var overlay = document.createElement('div');
+    overlay.className = 'disclaimer-mask';
+    var html = '<div class="disclaimer-sheet">';
+    html += '<div class="disclaimer-title">免责声明</div>';
+    html += '<div class="disclaimer-body">' + escapeHtml(text) + '</div>';
+    html += '<div class="disclaimer-actions">';
+    html += '<button class="disclaimer-btn ghost" id="disclaimerReject">不同意</button>';
+    html += '<button class="disclaimer-btn primary" id="disclaimerAgree">我已阅读并同意</button>';
+    html += '</div></div>';
+    overlay.innerHTML = html;
+    document.body.appendChild(overlay);
+    // 触发滑出动画
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { overlay.classList.add('open'); });
+    });
+    overlay.querySelector('#disclaimerAgree').addEventListener('click', function() {
+      Store.state.settings.disclaimerAgreed = true;
+      Store.save();
+      overlay.classList.remove('open');
+      setTimeout(function() { overlay.remove(); }, 350);
+    });
+    overlay.querySelector('#disclaimerReject').addEventListener('click', function() {
+      Toast.show('需同意后才能使用');
+    });
+  }
+
+  // 阅读进度自动同步：每 30s 把书架（含进度）推送到云端；
+  // 未登录/未开云同步/远端无表时自动降级为本地保存（pushReadShelf 内部兜底，不报错）
+  function startReadProgressSync() {
+    setInterval(function() {
+      try {
+        if (typeof SB !== 'undefined' && SB.pushReadShelf) {
+          SB.pushReadShelf().catch(function() {});
+        }
+      } catch (e) { console.warn('[App] 阅读进度同步跳过:', e); }
+    }, 30000);
   }
 
   // 新版本公告：版本不一致时弹出，必须点「知道了」关闭

@@ -142,6 +142,27 @@ const NovelReader = (() => {
     return (v >= 10 && v <= 100) ? v : 100;
   }
 
+  /* 亮度：独立黑色遮罩层（替代内容 filter 方案） */
+  function applyBrightness() {
+    var mask = el('novelBrightnessMask');
+    if (!mask) return;
+    var dark = (100 - getBrightness()) / 100;
+    mask.style.setProperty('--brightness', dark.toFixed(2));
+  }
+
+  /* 字体/主题切换：当前页文字淡出 → DOM 更新 → 淡入 */
+  function fadeUpdate(fn) {
+    var target = state.frontEl || el('novelReaderContent');
+    if (!target) { fn(); return; }
+    target.classList.add('novel-fade-out');
+    setTimeout(function() {
+      fn();
+      var t2 = state.frontEl || el('novelReaderContent');
+      if (t2) t2.classList.remove('novel-fade-out');
+      target.classList.remove('novel-fade-out');
+    }, 150);
+  }
+
   function effectiveColors() {
     if (state.settings.night) return { bg: NIGHT_BG, color: NIGHT_TEXT };
     var t = bgTheme(state.settings.bgTheme);
@@ -160,8 +181,8 @@ const NovelReader = (() => {
       content.style.fontSize = st.fontSize + 'px';
       content.style.lineHeight = st.lineHeight;
       content.style.fontFamily = fontCss(st.fontFamily);
-      content.style.filter = 'brightness(' + (getBrightness() / 100) + ')';
     }
+    applyBrightness();
     var top = el('novelTopProgress');
     if (top) top.style.color = eff.color;
     if (state.pagerEl) {
@@ -240,7 +261,7 @@ const NovelReader = (() => {
   }
 
   function close() {
-    saveProgress();
+    saveProgress(true);
     var overlay = el('novelReaderOverlay');
     if (overlay) {
       overlay.classList.add('hidden');
@@ -760,7 +781,8 @@ const NovelReader = (() => {
     if (loading) loading.classList.toggle('hidden', !show);
   }
 
-  function saveProgress() {
+  var progressSaveTimer = null;
+  function saveProgress(immediate) {
     var shelf = Store.state.read.shelf;
     for (var i = 0; i < shelf.length; i++) {
       if (shelf[i].url === state.bookUrl) {
@@ -768,10 +790,17 @@ const NovelReader = (() => {
         shelf[i].chapterName = state.chapters[state.currentChapter] ? state.chapters[state.currentChapter].name : '';
         shelf[i].pageIdx = isPaged() ? state.currentPage : (el('novelReaderContent') ? el('novelReaderContent').scrollTop : 0);
         shelf[i].lastRead = Date.now();
-        Store.save();
         break;
       }
     }
+    // 防抖落盘，避免频繁 localStorage 写入
+    if (immediate) {
+      if (progressSaveTimer) { clearTimeout(progressSaveTimer); progressSaveTimer = null; }
+      Store.save();
+      return;
+    }
+    if (progressSaveTimer) clearTimeout(progressSaveTimer);
+    progressSaveTimer = setTimeout(function() { progressSaveTimer = null; Store.save(); }, 400);
   }
 
   /* ---------- 目录页 ---------- */
@@ -982,8 +1011,7 @@ const NovelReader = (() => {
     el('novelBrightness').addEventListener('input', function() {
       var v = clamp(parseInt(this.value, 10) || 100, 10, 100);
       localStorage.setItem(BRIGHTNESS_KEY, String(v));
-      var content = el('novelReaderContent');
-      if (content) content.style.filter = 'brightness(' + (v / 100) + ')';
+      applyBrightness();
     });
 
     el('novelFontMinus').addEventListener('click', function() {
@@ -1014,8 +1042,10 @@ const NovelReader = (() => {
       var cell = e.target.closest('.novel-font-cell');
       if (!cell) return;
       saveSetting('fontFamily', cell.dataset.font);
-      applySettings();
-      relayout();
+      fadeUpdate(function() {
+        applySettings();
+        relayout();
+      });
     });
 
     el('novelColorRow').addEventListener('click', function(e) {
@@ -1033,7 +1063,9 @@ const NovelReader = (() => {
       saveSetting('bgTheme', t.id);
       // 背景与文字颜色联动：深色背景自动配浅色字，反之亦然（用户可再手动覆盖）
       saveSetting('textColor', t.text);
-      applySettings();
+      fadeUpdate(function() {
+        applySettings();
+      });
     });
 
     el('novelFlipRow').addEventListener('click', function(e) {

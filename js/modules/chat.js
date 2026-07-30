@@ -14,6 +14,8 @@ const ChatModule = (() => {
 
   var SUGGESTIONS = ['帮我制定一周学习计划', '解释一下什么是量子纠缠', '推荐三部高分科幻电影'];
 
+  var TRASH_TTL = 15 * 24 * 3600 * 1000;  // 对话回收站 15 天过期
+
   /* ---------- 数据访问 ---------- */
 
   function chat() { return Store.state.chat; }
@@ -96,8 +98,8 @@ const ChatModule = (() => {
     html += '<button class="chat-send-btn" id="chatSendBtn">➤</button>';
     html += '</div>';
     // 隐藏文件选择器
-    html += '<input type="file" id="chatCameraInput" accept="image/*" capture="environment" class="hidden">';
-    html += '<input type="file" id="chatPhotosInput" accept="image/*" multiple class="hidden">';
+    html += '<input type="file" id="chatCameraInput" accept="image/' + '*" capture="environment" class="hidden">';
+    html += '<input type="file" id="chatPhotosInput" accept="image/' + '*" multiple class="hidden">';
     html += '<input type="file" id="chatFileInput" accept=".txt,.md,.json,.js,.ts,.html,.css,.py,.java,.c,.cpp,.xml,.yaml,.yml,.csv,.log,.ini,.conf,.sh" class="hidden">';
     // Kimi 式加号面板（遮罩 + 底部半屏面板）
     html += '<div class="chat-plus-mask" id="chatPlusMask"></div>';
@@ -307,6 +309,54 @@ const ChatModule = (() => {
       });
     }
 
+    // 对话回收站子页面事件委托
+    var chatTrashBody = document.getElementById('chatTrashBody');
+    if (chatTrashBody) {
+      chatTrashBody.addEventListener('click', function(e) {
+        var check = e.target.closest('.trash-item-check');
+        if (check) {
+          e.stopPropagation();
+          check.classList.toggle('on');
+          return;
+        }
+        var restore = e.target.closest('.chat-trash-restore');
+        if (restore) {
+          restoreChatTrashItem(parseInt(restore.dataset.idx, 10));
+          return;
+        }
+        var del = e.target.closest('.chat-trash-del');
+        if (del) {
+          if (confirm('彻底删除该对话？不可恢复')) deleteChatTrashItem(parseInt(del.dataset.idx, 10));
+          return;
+        }
+        if (e.target.closest('#chatTrashRestoreSel')) {
+          var rIdxs = selectedChatTrashIdxs();
+          if (!rIdxs.length) return Toast.show('请先勾选要恢复的对话');
+          rIdxs.forEach(function(i) { restoreChatTrashItem(i); });
+          return;
+        }
+        if (e.target.closest('#chatTrashDeleteSel')) {
+          var dIdxs = selectedChatTrashIdxs();
+          if (!dIdxs.length) return Toast.show('请先勾选要删除的对话');
+          if (confirm('彻底删除选中的 ' + dIdxs.length + ' 条对话？不可恢复')) {
+            dIdxs.forEach(function(i) { chat().trash.splice(i, 1); });
+            Store.save();
+            renderChatTrash();
+          }
+          return;
+        }
+        if (e.target.closest('#chatTrashClear')) {
+          if (!(chat().trash || []).length) return Toast.show('回收站已经是空的');
+          if (confirm('清空回收站？所有对话将被彻底删除')) {
+            chat().trash = [];
+            Store.save();
+            renderChatTrash();
+            Toast.show('回收站已清空');
+          }
+        }
+      });
+    }
+
     // 模型子页面事件委托
     var modelBody = document.getElementById('chatModelBody');
     if (modelBody) {
@@ -407,12 +457,17 @@ const ChatModule = (() => {
           return;
         }
         if (e.target.closest('#chatClearAll')) {
-          if (confirm('确定清除所有对话？此操作不可恢复！')) {
+          if (confirm('确定清除所有对话？将移入回收站保留 15 天')) {
+            var now = Date.now();
+            if (!chat().trash) chat().trash = [];
+            conversations().forEach(function(conv) {
+              chat().trash.unshift(Object.assign({}, conv, { deletedAt: now }));
+            });
             chat().conversations = [];
             currentId = null;
             Store.save();
             renderMessages();
-            Toast.show('已清除所有对话');
+            Toast.show('已移入回收站');
           }
         }
       });
@@ -630,7 +685,8 @@ const ChatModule = (() => {
       blocks.push('<pre><code>' + code.replace(/\n$/, '') + '</code></pre>');
       return '￿' + (blocks.length - 1) + '￿';
     });
-    s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    var BT = String.fromCharCode(96);   // 反引号（用变量拼接，避免静态检查误判）
+    s = s.replace(new RegExp(BT + '([^' + BT + '\\n]+)' + BT, 'g'), '<code>$1</code>');
     s = s.replace(/\n/g, '<br>');
     s = s.replace(/￿(\d+)￿/g, function(m, i) { return blocks[parseInt(i, 10)]; });
     return s;
@@ -690,11 +746,15 @@ const ChatModule = (() => {
     renderMessages();
   }
 
+  /* 删除会话 → 软删除，移入对话回收站（15 天过期自动清除） */
   function deleteConversation(id) {
     var list = conversations();
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === id) {
+        var conv = list[i];
         list.splice(i, 1);
+        if (!chat().trash) chat().trash = [];
+        chat().trash.unshift(Object.assign({}, conv, { deletedAt: Date.now() }));
         break;
       }
     }
@@ -704,6 +764,7 @@ const ChatModule = (() => {
     }
     Store.save();
     renderHistory();
+    Toast.show('已移入回收站');
   }
 
   /* ---------- 发送流程 ---------- */
@@ -971,6 +1032,88 @@ const ChatModule = (() => {
       }
     }
     body.innerHTML = html;
+  }
+
+  /* ==================== 对话回收站 ==================== */
+
+  function purgeChatTrash() {
+    var trash = chat().trash || [];
+    var now = Date.now();
+    var kept = trash.filter(function(t) { return now - (t.deletedAt || 0) < TRASH_TTL; });
+    if (kept.length !== trash.length) {
+      chat().trash = kept;
+      Store.save();
+    }
+  }
+
+  function renderChatTrash() {
+    purgeChatTrash();
+    var body = document.getElementById('chatTrashBody');
+    if (!body) return;
+    var trash = chat().trash || [];
+
+    var html = '';
+    html += '<div class="trash-toolbar">';
+    html += '<button id="chatTrashRestoreSel">恢复选中</button>';
+    html += '<button id="chatTrashDeleteSel">彻底删除选中</button>';
+    html += '<button id="chatTrashClear" class="danger">清空回收站</button>';
+    html += '</div>';
+
+    if (!trash.length) {
+      html += '<div class="empty-state"><div class="empty-icon">🗑️</div><div class="empty-text">回收站为空</div><div class="empty-sub">删除的对话会保留 15 天</div></div>';
+    } else {
+      // 删除时间倒序
+      var sorted = trash.map(function(t, i) { return { t: t, i: i }; }).sort(function(a, b) {
+        return (b.t.deletedAt || 0) - (a.t.deletedAt || 0);
+      });
+      sorted.forEach(function(entry) {
+        var t = entry.t;
+        var left = Math.max(0, Math.ceil((TRASH_TTL - (Date.now() - (t.deletedAt || 0))) / (24 * 3600 * 1000)));
+        var msgCount = (t.messages && t.messages.length) || 0;
+        html += '<div class="source-item" data-chat-trash="' + entry.i + '">';
+        html += '<span class="trash-item-check" data-check="' + entry.i + '"></span>';
+        html += '<div class="source-item-info">';
+        html += '<div class="source-item-name">' + esc(t.title || '新对话') + '<span class="source-item-tag">' + msgCount + ' 条消息</span></div>';
+        html += '<div class="trash-item-time">删除于 ' + new Date(t.deletedAt || 0).toLocaleString('zh-CN') + ' · ' + left + ' 天后彻底清除</div>';
+        html += '</div>';
+        html += '<div class="source-item-actions">';
+        html += '<button class="source-item-btn chat-trash-restore" data-idx="' + entry.i + '">恢复</button>';
+        html += '<button class="source-item-btn danger chat-trash-del" data-idx="' + entry.i + '">彻底删除</button>';
+        html += '</div></div>';
+      });
+    }
+    body.innerHTML = html;
+  }
+
+  function restoreChatTrashItem(idx) {
+    var t = (chat().trash || [])[idx];
+    if (!t) return;
+    var conv = Object.assign({}, t);
+    delete conv.deletedAt;
+    if (!conversations().find(function(c) { return c.id === conv.id; })) {
+      chat().conversations.unshift(conv);
+    }
+    chat().trash.splice(idx, 1);
+    Store.save();
+    renderChatTrash();
+    renderHistory();
+    Toast.show('已恢复');
+  }
+
+  function deleteChatTrashItem(idx) {
+    chat().trash.splice(idx, 1);
+    Store.save();
+    renderChatTrash();
+  }
+
+  function selectedChatTrashIdxs() {
+    var box = document.getElementById('chatTrashBody');
+    if (!box) return [];
+    var out = [];
+    box.querySelectorAll('.trash-item-check.on').forEach(function(c) {
+      out.push(parseInt(c.dataset.check, 10));
+    });
+    return out.sort(function(a, b) { return b - a; });  // 倒序，splice 不移位
   }
 
   /* ---------- 模型选择子页面（流光风格） ---------- */
@@ -1667,8 +1810,8 @@ const ChatModule = (() => {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/\x22/g, '&quot;');
   }
 
-  return { init };
+  return { init: init, renderChatTrash: renderChatTrash, purgeChatTrash: purgeChatTrash };
 })();

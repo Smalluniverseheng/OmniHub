@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
-  <link rel="stylesheet" href="css/style.css?v=7.8">
+  <link rel="stylesheet" href="css/style.css?v=8.0">
   <style>
     /* 开屏关键样式（内联兜底，style.css 加载失败也能显示） */
     #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0D0E13;transition:opacity .6s cubic-bezier(.22,.8,.32,1),visibility .6s;}
@@ -66,6 +66,13 @@
         </div>
       </div>
       <div class="page-body" id="readBody"></div>
+      <!-- 阅读模块独立底部导航栏（窄版） -->
+      <div class="read-bottom-nav" id="readBottomNav">
+        <button class="read-nav-item active" data-readview="shelf"><span class="read-nav-icon">⌂</span><span class="read-nav-label">书架</span></button>
+        <button class="read-nav-item" data-readview="discover"><span class="read-nav-icon">✦</span><span class="read-nav-label">发现</span></button>
+        <button class="read-nav-item" data-readview="bookmark"><span class="read-nav-icon">🔖</span><span class="read-nav-label">书签</span></button>
+        <button class="read-nav-item" data-readview="profile"><span class="read-nav-icon">☺</span><span class="read-nav-label">我的</span></button>
+      </div>
     </div>
 
     <!-- 对话模块 -->
@@ -150,6 +157,8 @@
       </div>
       <div class="novel-bottom-progress"><i id="novelProgressFill"></i></div>
     </div>
+    <!-- 亮度遮罩层：独立黑色遮罩，替代内容 filter -->
+    <div id="novelBrightnessMask" class="novel-brightness-mask"></div>
     <div id="novelReaderTopbar" class="reader-topbar">
       <button id="novelReaderBack">←</button>
       <span id="novelReaderTitle">小说</span>
@@ -286,11 +295,36 @@
     </div>
     <div class="subpage-body">
       <div class="source-import-box">
+        <div class="source-url-row">
+          <input type="url" id="sourceUrlInput" placeholder="网络 URL 导入（.js / .json 书源地址）...">
+          <button id="sourceUrlImportBtn">下载</button>
+        </div>
+        <div id="sourceUrlProgress" class="source-url-progress hidden">
+          <svg class="progress-ring" viewBox="0 0 44 44">
+            <circle class="progress-ring-bg" cx="22" cy="22" r="19"></circle>
+            <circle class="progress-ring-fg" id="sourceProgressFg" cx="22" cy="22" r="19"></circle>
+          </svg>
+          <span id="sourceProgressText">下载中…</span>
+        </div>
         <textarea id="sourceImportInput" placeholder="粘贴书源：支持 Legado JSON（单个或合集）、Venera JS 图源脚本、CSS 选择器配置，自动识别格式"></textarea>
-        <button id="sourceImportBtn">导入书源</button>
+        <div class="source-import-actions">
+          <button id="sourceImportBtn">导入书源</button>
+          <button id="sourceFileBtn">本地文件导入</button>
+          <input type="file" id="sourceFileInput" accept=".js,.json" class="hidden">
+        </div>
       </div>
+      <div id="sourceTestResult"></div>
       <div id="sourceList"></div>
     </div>
+  </div>
+
+  <!-- 子页面：阅读回收站 -->
+  <div class="subpage" id="subReadTrash">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>回收站</h3>
+    </div>
+    <div class="subpage-body" id="readTrashBody"></div>
   </div>
 
   <!-- 子页面：阅读设置 -->
@@ -374,6 +408,33 @@
     <div class="subpage-body" id="changelogBody"></div>
   </div>
 
+  <!-- 子页面：对话回收站 -->
+  <div class="subpage" id="subChatTrash">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>对话回收站</h3>
+    </div>
+    <div class="subpage-body" id="chatTrashBody"></div>
+  </div>
+
+  <!-- 子页面：设备日志 -->
+  <div class="subpage" id="subErrorLog">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>设备日志</h3>
+    </div>
+    <div class="subpage-body" id="errorLogBody"></div>
+  </div>
+
+  <!-- 子页面：关于与免责声明 -->
+  <div class="subpage" id="subAbout">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>免责声明</h3>
+    </div>
+    <div class="subpage-body" id="aboutBody"></div>
+  </div>
+
   <!-- 加载层 -->
   <div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loading-spinner"></div>
@@ -382,25 +443,26 @@
   <!-- Toast -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="js/providers.js?v=7.8"></script>
-  <script src="js/store.js?v=7.8"></script>
+  <script src="js/providers.js?v=8.0"></script>
+  <script src="js/store.js?v=8.0"></script>
   <!-- Supabase SDK（UMD 全局 window.supabase）：主链 jsdelivr，失败回退 unpkg；两者都挂则云功能优雅降级，本地功能零影响 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" onerror="var _s=document.createElement('script');_s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js';document.head.appendChild(_s)"></script>
-  <script src="js/supabase.js?v=7.8"></script>
-  <script src="js/legado-engine.js?v=7.8"></script>
-  <script src="js/source-detect.js?v=7.8"></script>
-  <script src="js/ai-providers.js?v=7.8"></script>
-  <script src="js/ai-models.js?v=7.8"></script>
-  <script src="js/ai-api.js?v=7.8"></script>
-  <script src="js/voice.js?v=7.8"></script>
-  <script src="js/changelog.js?v=7.8"></script>
-  <script src="js/venera-engine.js?v=7.8"></script>
-  <script src="js/modules/nav.js?v=7.8"></script>
-  <script src="js/modules/reader.js?v=7.8"></script>
-  <script src="js/modules/novel-reader.js?v=7.8"></script>
-  <script src="js/modules/profile.js?v=7.8"></script>
-  <script src="js/modules/chat.js?v=7.8"></script>
-  <script src="js/modules/read.js?v=7.8"></script>
-  <script src="js/app.js?v=7.8"></script>
+  <script src="js/supabase.js?v=8.0"></script>
+  <script src="js/legado-engine.js?v=8.0"></script>
+  <script src="js/legado-converter.js?v=8.0"></script>
+  <script src="js/source-detect.js?v=8.0"></script>
+  <script src="js/ai-providers.js?v=8.0"></script>
+  <script src="js/ai-models.js?v=8.0"></script>
+  <script src="js/ai-api.js?v=8.0"></script>
+  <script src="js/voice.js?v=8.0"></script>
+  <script src="js/changelog.js?v=8.0"></script>
+  <script src="js/venera-engine.js?v=8.0"></script>
+  <script src="js/modules/nav.js?v=8.0"></script>
+  <script src="js/modules/reader.js?v=8.0"></script>
+  <script src="js/modules/novel-reader.js?v=8.0"></script>
+  <script src="js/modules/profile.js?v=8.0"></script>
+  <script src="js/modules/chat.js?v=8.0"></script>
+  <script src="js/modules/read.js?v=8.0"></script>
+  <script src="js/app.js?v=8.0"></script>
 </body>
 </html>

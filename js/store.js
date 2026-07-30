@@ -30,6 +30,7 @@ const Store = (() => {
       sources: [],        // 书源列表
       shelf: [],          // 书架 [{id, title, author, cover, type:'novel'|'comic', url, source, chapterIdx, pageIdx, chapterName, lastRead}]
       history: [],        // 阅读历史
+      trash: [],          // 回收站 [{kind:'book'|'source', item:{...}, deletedAt}] 15 天过期自动清除
       settings: {
         readerMode: 'gallery-rtl',
         preloadCount: 3,
@@ -58,7 +59,8 @@ const Store = (() => {
         rate: 1,            // 语速 0.5-2
         autoSpeak: false    // AI 回复完成自动朗读
       },
-      conversations: []   // [{id,title,messages:[{id,role,content,image,images,files,thinking,ts}],createdAt,updatedAt}]
+      conversations: [],  // [{id,title,messages:[{id,role,content,image,images,files,thinking,ts}],createdAt,updatedAt}]
+      trash: []           // 对话回收站 [{...conv, deletedAt}] 15 天过期自动清除
     },
 
     // 会员/账号
@@ -79,15 +81,21 @@ const Store = (() => {
       storageUsedMb: 0,
       storageQuotaMb: 0,
       isAdmin: false,
-      lastSyncAt: 0
+      lastSyncAt: 0,
+      avatar: ''           // 头像（Base64 dataURL 或空）
     },
+
+    // 设备错误日志（上限 50 条）
+    errorLog: [],
 
     // 全局设置
     settings: {
       fabPosition: { x: null, y: null },  // null = 默认右下角
       fabSnap: true,                       // 是否吸附边缘
       notifications: true,
-      autoSync: false
+      autoSync: false,
+      errorLogEnabled: false,   // 设备日志自动上报开关
+      disclaimerAgreed: false   // 首次打开免责声明是否已同意
     }
   };
 

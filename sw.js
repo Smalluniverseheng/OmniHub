@@ -1,4 +1,4 @@
-const VERSION = 'v7.8';
+const VERSION = 'v8.0';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [
@@ -21,6 +21,7 @@ const ASSETS = [
   '/js/changelog.js',
   '/js/venera-engine.js',
   '/js/legado-engine.js',
+  '/js/legado-converter.js',
   '/js/source-detect.js',
   '/js/providers.js',
   '/assets/brand.jpg',
