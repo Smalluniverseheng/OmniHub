@@ -39,15 +39,15 @@ const I18n = {
     },
     fr: {
       my: 'Profil', memberCenter: 'Centre Membre', cloudSync: 'Sync Cloud', modules: 'Modules',
-      moduleManage: 'Gestion Modules', homePage: 'Page d'accueil', data: 'Données', dataManage: 'Gestion Données',
+      moduleManage: 'Gestion Modules', homePage: "Page d'accueil", data: 'Données', dataManage: 'Gestion Données',
       clearCache: 'Vider Cache', settings: 'Paramètres', globalSettings: 'Paramètres Globaux', about: 'À propos',
-      login: 'Connexion', register: 'Inscription', logout: 'Déconnexion', username: 'Nom d'utilisateur',
+      login: 'Connexion', register: 'Inscription', logout: 'Déconnexion', username: "Nom d'utilisateur",
       password: 'Mot de passe', notLogged: 'Non connecté', loginToSync: 'Connectez-vous pour synchroniser',
       loggedIn: 'Connecté', exportData: 'Exporter', importData: 'Importer', resetData: 'Réinitialiser',
       theme: 'Thème', dark: 'Sombre', light: 'Clair', followSystem: 'Suivre système',
       language: 'Langue', fabSnap: 'FAB adhérence bord', notifications: 'Notifications',
       reading: 'Lecture', chat: 'Chat', novelAndComic: 'Roman & BD', aiChat: 'Chat IA',
-      enabled: ' activé', selectHomePage: 'Choisir page d'accueil', saved: 'Enregistré',
+      enabled: ' activé', selectHomePage: "Choisir page d'accueil", saved: 'Enregistré',
       cacheCleared: 'Cache vidé', dataExported: 'Données exportées', dataImported: 'Données importées',
       dataReset: 'Données réinitialisées', confirmReset: 'Réinitialiser? Irréversible!',
       confirmClear: 'Vider cache? Bibliothèque conservée.', confirmLogout: 'Déconnexion?',
@@ -215,7 +215,7 @@ const ProfileModule = (() => {
     html += '<div class="settings-group-title">' + t('about') + '</div>';
     html += '<div class="settings-row">';
     html += '<div class="settings-row-left"><div class="settings-row-icon">📦</div><span class="settings-row-text">OmniHub</span></div>';
-    html += '<div class="settings-row-right">v7.0</div></div>';
+    html += '<div class="settings-row-right">v7.1</div></div>';
     html += '</div>';
 
     body.innerHTML = html;
