@@ -392,5 +392,33 @@ const ReadModule = (() => {
     } catch(e) { return []; }
   }
 
-  return { init, renderRead };
+  function setTab(tab) {
+    currentTab = tab;
+    renderRead();
+  }
+
+  function addToShelf(book) {
+    if (!Store.state.read.shelf.find(b => b.url === book.url)) {
+      Store.state.read.shelf.unshift({
+        id: book.id || book.url,
+        title: book.title,
+        author: book.author || '',
+        cover: book.cover || '',
+        type: book.type || 'novel',
+        url: book.url,
+        source: book.source || '',
+        chapterIdx: 0,
+        pageIdx: 0,
+        chapterName: '',
+        lastRead: Date.now()
+      });
+      Store.save();
+      Toast.show('已加入书架');
+      renderRead();
+    } else {
+      Toast.show('已在书架中');
+    }
+  }
+
+  return { init, renderRead, setTab, addToShelf, openBook, doSearch };
 })();
