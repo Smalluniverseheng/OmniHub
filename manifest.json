@@ -2,6 +2,7 @@
   "name": "OmniHub",
   "short_name": "OmniHub",
   "description": "All-in-one aggregation platform: Chat, Read, Profile",
+  "id": "/",
   "start_url": "/",
   "scope": ".",
   "display": "standalone",
@@ -30,22 +31,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "assets/screenshot-mobile.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Mobile Home"
-    },
-    {
-      "src": "assets/screenshot-desktop.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Desktop Home"
     }
   ],
   "shortcuts": [
