@@ -1,4 +1,4 @@
-const VERSION = 'v7.7';
+const VERSION = 'v7.8';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [
@@ -6,6 +6,7 @@ const ASSETS = [
   '/index.html',
   '/css/style.css',
   '/js/store.js',
+  '/js/supabase.js',
   '/js/ai-providers.js',
   '/js/ai-models.js',
   '/js/ai-api.js',
@@ -40,5 +41,12 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  const url = e.request.url;
+  // 云服务域名（Supabase / Cloudflare Worker / CDN）直接放行，不缓存
+  if (url.indexOf('supabase.co') !== -1 || url.indexOf('workers.dev') !== -1 ||
+      url.indexOf('cdn.jsdelivr.net') !== -1 || url.indexOf('unpkg.com') !== -1) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });
