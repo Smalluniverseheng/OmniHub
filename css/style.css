@@ -76,7 +76,7 @@
   .splash-dot { animation: none; }
 }
 
-/* ==================== OmniHub v7.0 - Global Styles ==================== */
+/* ==================== OmniHub v7.1 - Global Styles ==================== */
 
 /* === 主题变量 === */
 :root {
@@ -119,6 +119,9 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* 通用隐藏 */
+.hidden { display: none !important; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; overflow: hidden; transition: background 0.3s, color 0.3s; }
 
 /* === 页面 === */
@@ -147,7 +150,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .empty-sub { font-size: 13px; }
 
 /* === 悬浮球导航 === */
-.fab-nav { position: fixed; z-index: 1000; }
+.fab-nav { position: fixed; z-index: 1000; transition: opacity .25s, transform .25s; }
+.fab-nav.fab-hidden { opacity: 0; transform: scale(.6); pointer-events: none; }
 .fab-trigger { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 20px rgba(99,102,241,0.4); position: fixed; right: 20px; bottom: 30px; transition: transform 0.2s, box-shadow 0.2s; user-select: none; -webkit-user-select: none; touch-action: none; z-index: 1002; }
 .fab-trigger:active { transform: scale(0.92); }
 .fab-icon { transition: transform 0.3s; display: flex; align-items: center; justify-content: center; }
@@ -283,8 +287,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 #readerPageSlider { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; outline: none; }
 #readerPageSlider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: #fff; border-radius: 50%; cursor: pointer; }
 #readerPageIndicator { font-size: 13px; color: #aaa; min-width: 60px; text-align: center; }
-#readerFloat { position: fixed; right: 16px; bottom: 90px; display: flex; flex-direction: column; gap: 12px; z-index: 99; opacity: 0; transform: translateX(20px); transition: all 0.25s ease; pointer-events: none; }
-#readerFloat.open { opacity: 1; transform: translateX(0); pointer-events: auto; }
+#readerFloat, #novelReaderFloat { position: fixed; right: 16px; bottom: 90px; display: flex; flex-direction: column; gap: 12px; z-index: 99; opacity: 0; transform: translateX(20px); transition: all 0.25s ease; pointer-events: none; }
+#readerFloat.open, #novelReaderFloat.open { opacity: 1; transform: translateX(0); pointer-events: auto; }
 .reader-float-btn { width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .reader-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 280px; max-width: 80vw; background: rgba(20,20,20,0.96); backdrop-filter: blur(16px); z-index: 101; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); display: flex; flex-direction: column; }
 .reader-panel.open { transform: translateX(0); }
