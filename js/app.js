@@ -1,4 +1,4 @@
-/* ==================== OmniHub App - 入口 ==================== */
+/* ==================== OmniHub App ==================== */
 
 const App = (() => {
   'use strict';
@@ -6,47 +6,40 @@ const App = (() => {
   let currentPage = 'profile';
 
   function init() {
-    // 检查老用户数据迁移
     migrateLegacy();
+
+    // 先初始化 Store 确保数据存在
+    if (!Store.state) Store.load();
+
+    // 全局事件委托 - 绑定在 document 上
+    bindGlobalEvents();
 
     // 初始化模块
     ProfileModule.init();
     ReadModule.init();
-
-    // 初始化导航
     Nav.init();
 
     // 跳转到主页
     const home = Store.state.homePage || 'profile';
-    if (Store.state.modules[home]?.enabled || home === 'profile') {
+    if (Store.state.modules[home] && Store.state.modules[home].enabled || home === 'profile') {
       switchPage(home);
     } else {
       switchPage('profile');
     }
-
-    // 全局事件
-    bindGlobalEvents();
   }
 
   function migrateLegacy() {
-    // 从 aiBeta 迁移数据
     const legacy = localStorage.getItem('aibeta_state');
     if (!legacy) return;
     try {
       const data = JSON.parse(legacy);
-      // 迁移书源
       if (data.comicSources) {
-        Store.state.read.sources = data.comicSources.map(s => ({
-          ...s, type: s.type || 'css', mediaType: 'comic'
-        }));
+        Store.state.read.sources = data.comicSources.map(s => ({...s, type: s.type || 'css', mediaType: 'comic'}));
       }
       if (data.novelSources) {
-        Store.state.read.sources.push(...data.novelSources.map(s => ({
-          ...s, type: s.type || 'css', mediaType: 'novel'
-        })));
+        Store.state.read.sources.push(...data.novelSources.map(s => ({...s, type: s.type || 'css', mediaType: 'novel'})));
       }
-      // 迁移书架
-      if (data.bookshelf) {
+      if (data.bookshelf && data.bookshelf.items) {
         Store.state.read.shelf = data.bookshelf.items.map(b => ({
           id: b.url, title: b.name, author: b.author || '',
           cover: b.cover || '', type: 'novel', url: b.url,
@@ -55,12 +48,9 @@ const App = (() => {
           lastRead: b.lastRead || Date.now()
         }));
       }
-      // 标记已迁移
       Store.save();
-      console.log('Legacy data migrated');
-    } catch(e) {
-      console.error('Migration failed:', e);
-    }
+      console.log('Legacy migrated');
+    } catch(e) { console.error('Migration failed:', e); }
   }
 
   function switchPage(pageId) {
@@ -85,15 +75,25 @@ const App = (() => {
   }
 
   function bindGlobalEvents() {
-    // 子页面返回按钮
-    document.querySelectorAll('[data-close-sub]').forEach(btn => {
-      btn.addEventListener('click', closeSub);
+    // 事件委托 - 所有点击走这里
+    document.addEventListener('click', function(e) {
+      // 子页面返回按钮
+      const closeBtn = e.target.closest('[data-close-sub]');
+      if (closeBtn) { closeSub(); return; }
+
+      // 设置行点击 - 打开子页面
+      const settingsRow = e.target.closest('[data-sub]');
+      if (settingsRow && !e.target.closest('.toggle-switch')) {
+        const subId = settingsRow.dataset.sub;
+        if (subId) openSub(subId);
+        return;
+      }
     });
 
-    // 点击遮罩关闭子页面
+    // 子页面点击背景关闭
     document.querySelectorAll('.subpage').forEach(sub => {
-      sub.addEventListener('click', e => {
-        if (e.target === sub) closeSub();
+      sub.addEventListener('click', function(e) {
+        if (e.target === this) closeSub();
       });
     });
   }
@@ -101,5 +101,4 @@ const App = (() => {
   return { init, switchPage, openSub, closeSub, getCurrentPage: () => currentPage };
 })();
 
-// 启动
-document.addEventListener('DOMContentLoaded', () => App.init());
+document.addEventListener('DOMContentLoaded', function() { App.init(); });
