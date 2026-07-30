@@ -20,6 +20,9 @@ const App = (() => {
     if (typeof ChatModule !== "undefined") ChatModule.init();
     Nav.init();
 
+    // 漫画阅读器事件绑定（只需一次）
+    if (typeof Reader !== "undefined" && Reader.bindEvents) Reader.bindEvents();
+
     // 跳转到主页
     const home = Store.state.homePage || 'profile';
     if (Store.state.modules[home] && Store.state.modules[home].enabled || home === 'profile') {
@@ -27,6 +30,18 @@ const App = (() => {
     } else {
       switchPage('profile');
     }
+
+    dismissSplash();
+  }
+
+  function dismissSplash() {
+    // init 完成后 1.5 秒开始淡出，0.7 秒后移除节点
+    setTimeout(function() {
+      var s = document.getElementById('splash');
+      if (!s) return;
+      s.classList.add('done');
+      setTimeout(function() { if (s.parentNode) s.parentNode.removeChild(s); }, 700);
+    }, 1500);
   }
 
   function migrateLegacy() {
