@@ -8,6 +8,7 @@ const Store = (() => {
   const DEFAULT_STATE = {
     // 全局
     version: '7.0',
+    lastSeenVersion: '',     // 已读公告的版本号
     theme: 'dark',
     language: 'zh-CN',
     homePage: 'profile',  // 默认主页
