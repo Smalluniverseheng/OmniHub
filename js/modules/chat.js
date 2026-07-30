@@ -9,6 +9,8 @@ const ChatModule = (() => {
   var modelTab = 'all';
   var modelSearch = '';
   var quickChecking = false;
+  var pendingAttachments = []; // 待发送附件 [{id,kind:'image'|'file',name,dataUrl?,text?}]
+  var attSeq = 0;
 
   var SUGGESTIONS = ['帮我制定一周学习计划', '解释一下什么是量子纠缠', '推荐三部高分科幻电影'];
 
@@ -64,6 +66,9 @@ const ChatModule = (() => {
     renderModelPill();
     bindEvents();
     bindSwipe();
+    if (typeof Voice !== 'undefined') {
+      Voice.onStateChange = function() { updateSpeakButtons(); };
+    }
   }
 
   function renderLayout() {
@@ -82,10 +87,46 @@ const ChatModule = (() => {
     html += '</div>';
     // 消息区
     html += '<div class="chat-messages" id="chatMessages"></div>';
+    // 附件预览条
+    html += '<div class="chat-attach-strip hidden" id="chatAttachStrip"></div>';
     // 输入卡片
     html += '<div class="chat-input-card">';
+    html += '<button class="chat-plus-btn" id="chatPlusBtn" title="更多功能">+</button>';
     html += '<textarea id="chatInput" placeholder="输入消息..." rows="1"></textarea>';
     html += '<button class="chat-send-btn" id="chatSendBtn">➤</button>';
+    html += '</div>';
+    // 隐藏文件选择器
+    html += '<input type="file" id="chatCameraInput" accept="image/*" capture="environment" class="hidden">';
+    html += '<input type="file" id="chatPhotosInput" accept="image/*" multiple class="hidden">';
+    html += '<input type="file" id="chatFileInput" accept=".txt,.md,.json,.js,.ts,.html,.css,.py,.java,.c,.cpp,.xml,.yaml,.yml,.csv,.log,.ini,.conf,.sh" class="hidden">';
+    // Kimi 式加号面板（遮罩 + 底部半屏面板）
+    html += '<div class="chat-plus-mask" id="chatPlusMask"></div>';
+    html += '<div class="chat-plus-sheet" id="chatPlusSheet">';
+    // 主视图
+    html += '<div id="chatPlusMain">';
+    html += '<div class="chat-plus-grid">';
+    html += '<button class="chat-plus-cell" data-plus="camera"><span class="chat-plus-icon">📷</span><span class="chat-plus-label">拍照</span></button>';
+    html += '<button class="chat-plus-cell" data-plus="photos"><span class="chat-plus-icon">🖼️</span><span class="chat-plus-label">照片</span></button>';
+    html += '<button class="chat-plus-cell" data-plus="file"><span class="chat-plus-icon">📄</span><span class="chat-plus-label">本地文件</span></button>';
+    html += '<button class="chat-plus-cell" data-plus="presets"><span class="chat-plus-icon">💬</span><span class="chat-plus-label">常用语</span></button>';
+    html += '</div>';
+    html += '<div class="chat-plus-settings">';
+    html += '<div class="chat-plus-row">';
+    html += '<div class="chat-plus-row-info"><div class="chat-plus-row-name">深度思考</div><div class="chat-plus-row-sub" id="chatThinkingSub"></div></div>';
+    html += '<div class="toggle-switch" id="chatThinkingToggle"></div>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+    // 常用语二级视图
+    html += '<div id="chatPresetView" class="hidden">';
+    html += '<div class="chat-plus-subhead"><button class="chat-plus-back" id="chatPresetBack">←</button><span>常用语</span></div>';
+    html += '<div class="chat-preset-list" id="chatPresetList"></div>';
+    html += '<div class="chat-preset-new">';
+    html += '<input type="text" id="chatPresetTitle" placeholder="标题">';
+    html += '<textarea id="chatPresetContent" rows="3" placeholder="内容"></textarea>';
+    html += '<button class="btn-primary chat-preset-add" id="chatPresetAdd">＋ 新建常用语</button>';
+    html += '</div>';
+    html += '</div>';
     html += '</div>';
     html += '</div>';
     body.innerHTML = html;
@@ -139,7 +180,81 @@ const ChatModule = (() => {
       sendBtn.addEventListener('click', function() { onSend(); });
     }
 
-    // 消息区事件委托：重试 / 图片长按提示
+    // 加号按钮与面板
+    var plusBtn = document.getElementById('chatPlusBtn');
+    if (plusBtn) {
+      plusBtn.addEventListener('click', function() { openPlus(); });
+    }
+    var plusMask = document.getElementById('chatPlusMask');
+    if (plusMask) {
+      plusMask.addEventListener('click', function() { closePlus(); });
+    }
+    var plusSheet = document.getElementById('chatPlusSheet');
+    if (plusSheet) {
+      plusSheet.addEventListener('click', function(e) {
+        var cell = e.target.closest('.chat-plus-cell');
+        if (cell) {
+          onPlusAction(cell.dataset.plus);
+          return;
+        }
+        if (e.target.closest('#chatThinkingToggle')) {
+          toggleThinking();
+          return;
+        }
+        if (e.target.closest('#chatPresetBack')) {
+          showPlusMain();
+          return;
+        }
+        if (e.target.closest('#chatPresetAdd')) {
+          addPreset();
+          return;
+        }
+        var presetDel = e.target.closest('.chat-preset-del');
+        if (presetDel) {
+          e.stopPropagation();
+          deletePreset(presetDel.dataset.del);
+          return;
+        }
+        var presetItem = e.target.closest('.chat-preset-item');
+        if (presetItem) {
+          applyPreset(presetItem.dataset.pid);
+        }
+      });
+    }
+
+    // 文件选择器
+    var cameraInput = document.getElementById('chatCameraInput');
+    if (cameraInput) {
+      cameraInput.addEventListener('change', function() {
+        if (this.files && this.files.length) addImageFiles(this.files);
+        this.value = '';
+      });
+    }
+    var photosInput = document.getElementById('chatPhotosInput');
+    if (photosInput) {
+      photosInput.addEventListener('change', function() {
+        if (this.files && this.files.length) addImageFiles(this.files);
+        this.value = '';
+      });
+    }
+    var fileInput = document.getElementById('chatFileInput');
+    if (fileInput) {
+      fileInput.addEventListener('change', function() {
+        if (this.files && this.files.length) addTextFile(this.files[0]);
+        this.value = '';
+      });
+    }
+
+    // 附件预览条：删除
+    var attachStrip = document.getElementById('chatAttachStrip');
+    if (attachStrip) {
+      attachStrip.addEventListener('click', function(e) {
+        var del = e.target.closest('[data-att-del]');
+        if (del) removeAttachment(del.dataset.attDel);
+      });
+    }
+
+    // 消息区事件委托：重试 / 建议 / 图片全屏 / 朗读 / 思考折叠
     var messages = document.getElementById('chatMessages');
     if (messages) {
       messages.addEventListener('click', function(e) {
@@ -151,6 +266,21 @@ const ChatModule = (() => {
         var sug = e.target.closest('.chat-suggest-chip');
         if (sug) {
           sendText(sug.dataset.text || sug.textContent);
+          return;
+        }
+        var speakBtn = e.target.closest('.chat-speak-btn');
+        if (speakBtn) {
+          toggleSpeak(speakBtn.dataset.speak);
+          return;
+        }
+        var thinkHead = e.target.closest('.chat-thinking-head');
+        if (thinkHead && thinkHead.parentNode) {
+          thinkHead.parentNode.classList.toggle('open');
+          return;
+        }
+        var attImg = e.target.closest('.chat-msg-attach-img');
+        if (attImg) {
+          openLightbox(attImg.src);
         }
       });
       messages.addEventListener('contextmenu', function(e) {
@@ -232,6 +362,22 @@ const ChatModule = (() => {
           // 按前缀自动选中猜测厂商
           var sel = document.getElementById('chatQuickProvider');
           if (sel) sel.value = AIProviders.guessKeyProvider(t.value);
+        } else if (t.id === 'chatVoiceEngine') {
+          ensureVoice();
+          c.voice.engine = t.value;
+          Store.save();
+          renderSettings();
+        } else if (t.id === 'chatVoiceName') {
+          ensureVoice();
+          if ((c.voice.engine || 'browser') === 'openai') c.voice.ttsVoice = t.value;
+          else c.voice.voiceURI = t.value;
+          Store.save();
+        } else if (t.id === 'chatVoiceRate') {
+          ensureVoice();
+          c.voice.rate = parseFloat(t.value);
+          var rlabel = document.getElementById('chatVoiceRateValue');
+          if (rlabel) rlabel.textContent = c.voice.rate.toFixed(1);
+          Store.save();
         }
       });
       settingsBody.addEventListener('click', function(e) {
@@ -248,6 +394,18 @@ const ChatModule = (() => {
           doQuickCheck();
           return;
         }
+        if (e.target.closest('#chatVoicePreview')) {
+          previewVoice();
+          return;
+        }
+        var autoSpeak = e.target.closest('#chatAutoSpeakToggle');
+        if (autoSpeak) {
+          ensureVoice();
+          chat().voice.autoSpeak = !chat().voice.autoSpeak;
+          Store.save();
+          autoSpeak.classList.toggle('on', chat().voice.autoSpeak);
+          return;
+        }
         if (e.target.closest('#chatClearAll')) {
           if (confirm('确定清除所有对话？此操作不可恢复！')) {
             chat().conversations = [];
@@ -261,56 +419,79 @@ const ChatModule = (() => {
     }
   }
 
-  // 一键配置：识别厂商 + 检测有效性，成功才写入
+  // 自动匹配：并行探测全部厂商 models 端点，命中的全部写入 keys
   function doQuickCheck() {
     if (quickChecking) return;
     var keyInput = document.getElementById('chatQuickKey');
-    var baseInput = document.getElementById('chatQuickBase');
     var sel = document.getElementById('chatQuickProvider');
     var btn = document.getElementById('chatQuickBtn');
-    if (!keyInput || !sel) return;
+    var status = document.getElementById('chatQuickStatus');
+    if (!keyInput) return;
     var key = keyInput.value.trim();
     if (!key) {
       Toast.show('请先粘贴 API Key', 'error');
       return;
     }
-    var slug = sel.value;
-    var base = baseInput ? baseInput.value.trim() : '';
-    var p = AIProviders.get(slug);
+
+    // 前缀猜测保留为下拉默认项提示
+    if (sel) sel.value = AIProviders.guessKeyProvider(key);
 
     quickChecking = true;
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '<span class="chat-spin"></span>检测中…';
+      btn.innerHTML = '<span class="chat-spin"></span>匹配中…';
+    }
+    if (status) {
+      status.className = 'chat-quick-status';
+      status.textContent = '正在匹配…';
     }
 
-    AIAPI.validateKey(slug, key, base).then(function(res) {
+    // custom 厂商不参与自动匹配（保留手动配置）
+    var providers = AIProviders.list().filter(function(p) { return p.keySlug !== 'custom'; });
+    var jobs = providers.map(function(p) {
+      return AIAPI.validateKey(p, key, '', 5000).then(function(res) {
+        // HTTP 200 且返回体含 data/models 字段（解析出模型列表）即命中
+        return { slug: p.keySlug, name: p.name, ok: !!(res.ok && res.models && res.models.length) };
+      }).catch(function() {
+        return { slug: p.keySlug, name: p.name, ok: false };
+      });
+    });
+
+    Promise.all(jobs).then(function(results) {
       quickChecking = false;
       if (btn) {
         btn.disabled = false;
-        btn.textContent = '识别并检测';
+        btn.textContent = '自动匹配';
       }
-      if (res.ok) {
+      var hits = results.filter(function(r) { return r.ok; });
+      if (hits.length) {
         var c = chat();
         if (!c.keys) c.keys = {};
-        c.keys[slug] = key;
-        if (slug === 'custom' && base) c.customBase = base.replace(/\/+$/, '');
-        Store.save();
-        if (res.models && res.models.length) {
-          console.log('[OmniHub] ' + (p ? p.name : slug) + ' 可用模型(' + res.models.length + '):', res.models);
+        var names = [];
+        for (var i = 0; i < hits.length; i++) {
+          c.keys[hits[i].slug] = key;
+          names.push(hits[i].name);
         }
-        Toast.show('✓ 验证有效，已配置 ' + (p ? p.name : slug), 'success');
-        renderSettings();
-      } else {
-        Toast.show('✗ Key 无效或接口不可达：' + (res.error || '未知原因'), 'error');
+        Store.save();
+        if (status) {
+          status.className = 'chat-quick-status ok';
+          status.textContent = '✓ 已匹配并保存：' + names.join('、');
+        }
+        Toast.show('✓ 已匹配并保存：' + names.join('、'), 'success');
+      } else if (status) {
+        status.className = 'chat-quick-status fail';
+        status.textContent = '✗ 未匹配到任何厂商，请检查 Key 是否有效';
       }
-    }).catch(function(err) {
+    }).catch(function() {
       quickChecking = false;
       if (btn) {
         btn.disabled = false;
-        btn.textContent = '识别并检测';
+        btn.textContent = '自动匹配';
       }
-      Toast.show('✗ Key 无效或接口不可达：' + ((err && err.message) || '网络错误'), 'error');
+      if (status) {
+        status.className = 'chat-quick-status fail';
+        status.textContent = '✗ 未匹配到任何厂商，请检查 Key 是否有效';
+      }
     });
   }
 
@@ -413,10 +594,32 @@ const ChatModule = (() => {
     if (msg.image) {
       return '<img class="chat-msg-image" src="' + msg.image + '" alt="生成图片">';
     }
-    if (msg.loading && !msg.content) {
+    if (msg.loading && !msg.content && !msg.thinking) {
       return '<span class="chat-typing"><i></i><i></i><i></i></span>';
     }
-    return renderContent(msg.content || '');
+    var html = '';
+    // 思考过程（可折叠，默认折叠）
+    if (msg.thinking) {
+      html += '<div class="chat-thinking">';
+      html += '<div class="chat-thinking-head">💭 思考过程<span class="chat-thinking-arrow">▸</span></div>';
+      html += '<div class="chat-thinking-body">' + renderContent(msg.thinking) + '</div>';
+      html += '</div>';
+    }
+    // 用户消息的图片附件缩略图
+    if (msg.images && msg.images.length) {
+      html += '<div class="chat-msg-attach">';
+      for (var i = 0; i < msg.images.length; i++) {
+        html += '<img class="chat-msg-attach-img" src="' + msg.images[i] + '" alt="附件图片">';
+      }
+      html += '</div>';
+    }
+    html += renderContent(msg.content || '');
+    // AI 消息右下角朗读按钮
+    if (msg.role === 'assistant' && !msg.loading && msg.content) {
+      var speaking = typeof Voice !== 'undefined' && Voice.isSpeaking(msg.id);
+      html += '<button class="chat-speak-btn' + (speaking ? ' speaking' : '') + '" data-speak="' + msg.id + '" title="朗读">' + (speaking ? '⏸' : '🔊') + '</button>';
+    }
+    return html;
   }
 
   // 基础渲染：先 esc，再 ```code``` → pre，「code」→ code，换行 → <br>
@@ -513,14 +716,18 @@ const ChatModule = (() => {
     var input = document.getElementById('chatInput');
     if (!input) return;
     var text = input.value.trim();
-    if (!text) return;
+    if (!text && !pendingAttachments.length) return;
+    var atts = pendingAttachments.slice();
+    pendingAttachments = [];
+    renderAttachStrip();
     input.value = '';
     autoGrow(input);
-    sendText(text);
+    sendText(text, atts);
   }
 
-  function sendText(text) {
-    if (!text || sending) return;
+  function sendText(text, atts) {
+    atts = atts || [];
+    if ((!text && !atts.length) || sending) return;
     var c = chat();
 
     // 无 key / 未配置自定义接口 → 提示并打开设置页
@@ -539,15 +746,49 @@ const ChatModule = (() => {
       return;
     }
 
-    var conv = ensureConversation(text);
-    conv.messages.push({ id: uid(), role: 'user', content: text, ts: Date.now() });
+    // 拆分附件
+    var images = [];
+    var files = [];
+    for (var i = 0; i < atts.length; i++) {
+      if (atts[i].kind === 'image') images.push(atts[i].dataUrl);
+      else files.push({ name: atts[i].name, text: atts[i].text });
+    }
+
+    // 视觉检查：带图片但当前模型不支持识图 → 警告并中止（恢复附件与输入）
+    if (images.length && c.mode !== 'image') {
+      var entry = currentModelEntry();
+      if (!entry || entry.vision !== true) {
+        Toast.show('当前模型不支持识图，请切换带视觉的模型', 'error');
+        pendingAttachments = atts.concat(pendingAttachments);
+        renderAttachStrip();
+        var inp = document.getElementById('chatInput');
+        if (inp && text) {
+          inp.value = text;
+          autoGrow(inp);
+        }
+        return;
+      }
+    }
+
+    // 文本附件拼进用户消息末尾
+    var content = text || '';
+    for (var j = 0; j < files.length; j++) {
+      content += '\n\n【附件：' + files[j].name + '】\n' + files[j].text;
+    }
+    if (!content) content = '（发送了图片）';
+
+    var conv = ensureConversation(content);
+    var userMsg = { id: uid(), role: 'user', content: content, ts: Date.now() };
+    if (images.length) userMsg.images = images;
+    if (files.length) userMsg.files = files;
+    conv.messages.push(userMsg);
     // 首条用户消息后自动命名（前 20 字）
-    if (conv.title === '新对话') conv.title = text.slice(0, 20);
+    if (conv.title === '新对话') conv.title = content.slice(0, 20);
     conv.updatedAt = Date.now();
     Store.save();
 
     if (c.mode === 'image') {
-      doImage(conv, text);
+      doImage(conv, content);
     } else {
       doChat(conv);
     }
@@ -566,7 +807,13 @@ const ChatModule = (() => {
     hist = hist.slice(-20);
     for (var j = 0; j < hist.length; j++) {
       var h = hist[j];
-      msgs.push({ role: h.role, content: h.image ? '[生成了一张图片]' : h.content });
+      if (h.image) {
+        msgs.push({ role: h.role, content: '[生成了一张图片]' });
+      } else {
+        var hm = { role: h.role, content: h.content };
+        if (h.images && h.images.length) hm.images = h.images;
+        msgs.push(hm);
+      }
     }
     return msgs;
   }
@@ -588,19 +835,27 @@ const ChatModule = (() => {
       messages: buildMessages(conv),
       temperature: c.temperature,
       maxTokens: c.maxTokens,
+      thinking: !!(c.thinkingEnabled && isThinkingModel()),
       signal: aborter.signal,
-      onChunk: function(full) {
+      onChunk: function(full, thinking) {
         assistant.content = full;
+        if (thinking) assistant.thinking = thinking;
         updateBubble(assistant);
       }
     }).then(function(res) {
       assistant.content = res.content;
+      if (res.thinking) assistant.thinking = res.thinking;
       assistant.loading = false;
       if (res.usage) assistant.usage = res.usage;
       conv.updatedAt = Date.now();
       Store.save();
       updateBubble(assistant);
       setSending(false);
+      // 自动播报：AI 回复完成后自动朗读全文
+      var vc = c.voice;
+      if (vc && vc.autoSpeak && assistant.content && typeof Voice !== 'undefined') {
+        Voice.speak(assistant.content, assistant.id);
+      }
     }).catch(function(err) {
       assistant.loading = false;
       if (isAbort(err)) {
@@ -935,20 +1190,21 @@ const ChatModule = (() => {
     var html = '';
     var i;
 
-    // 一键配置：粘贴 Key 自动识别厂商并检测
+    // 自动匹配：粘贴 Key 并行探测全部厂商
     html += '<div class="settings-group">';
     html += '<div class="settings-group-title">一键配置</div>';
     html += '<div class="chat-quick-card">';
-    html += '<textarea id="chatQuickKey" rows="2" placeholder="粘贴 API Key，自动识别厂商"></textarea>';
-    html += '<input type="text" id="chatQuickBase" placeholder="接口地址(可选，默认官方)">';
+    html += '<textarea id="chatQuickKey" rows="2" placeholder="粘贴 API Key，自动匹配全部厂商"></textarea>';
     html += '<div class="chat-quick-row">';
     html += '<select id="chatQuickProvider">';
     for (i = 0; i < providers.length; i++) {
       html += '<option value="' + providers[i].keySlug + '"' + (providers[i].keySlug === 'openai' ? ' selected' : '') + '>' + esc(providers[i].name) + '</option>';
     }
     html += '</select>';
-    html += '<button class="btn-primary chat-quick-btn" id="chatQuickBtn">识别并检测</button>';
-    html += '</div></div></div>';
+    html += '<button class="btn-primary chat-quick-btn" id="chatQuickBtn">自动匹配</button>';
+    html += '</div>';
+    html += '<div class="chat-quick-status hidden" id="chatQuickStatus"></div>';
+    html += '</div></div>';
 
     // 分别配置（折叠）：各家 Key 单独输入
     html += '<details class="chat-manual">';
@@ -1003,6 +1259,9 @@ const ChatModule = (() => {
     html += '</div>';
     html += '</div>';
 
+    // 语音播报
+    html += renderVoiceSettings(c);
+
     // 危险操作
     html += '<div class="settings-group">';
     html += '<div class="settings-group-title" style="color:var(--danger)">危险操作</div>';
@@ -1010,6 +1269,385 @@ const ChatModule = (() => {
     html += '</div>';
 
     body.innerHTML = html;
+  }
+
+  /* ---------- 加号面板 ---------- */
+
+  function isThinkingModel() {
+    var entry = currentModelEntry();
+    return !!(entry && entry.thinking === true);
+  }
+
+  function openPlus() {
+    var mask = document.getElementById('chatPlusMask');
+    var sheet = document.getElementById('chatPlusSheet');
+    if (!mask || !sheet) return;
+    renderThinkingRow();
+    showPlusMain();
+    mask.classList.add('open');
+    sheet.classList.add('open');
+  }
+
+  function closePlus() {
+    var mask = document.getElementById('chatPlusMask');
+    var sheet = document.getElementById('chatPlusSheet');
+    if (mask) mask.classList.remove('open');
+    if (sheet) sheet.classList.remove('open');
+  }
+
+  function showPlusMain() {
+    var main = document.getElementById('chatPlusMain');
+    var preset = document.getElementById('chatPresetView');
+    if (main) main.classList.remove('hidden');
+    if (preset) preset.classList.add('hidden');
+  }
+
+  function showPresetView() {
+    var main = document.getElementById('chatPlusMain');
+    var preset = document.getElementById('chatPresetView');
+    if (main) main.classList.add('hidden');
+    if (preset) preset.classList.remove('hidden');
+    renderPresetList();
+  }
+
+  function onPlusAction(action) {
+    if (action === 'camera') {
+      var cam = document.getElementById('chatCameraInput');
+      if (cam) cam.click();
+      closePlus();
+    } else if (action === 'photos') {
+      var photos = document.getElementById('chatPhotosInput');
+      if (photos) photos.click();
+      closePlus();
+    } else if (action === 'file') {
+      var file = document.getElementById('chatFileInput');
+      if (file) file.click();
+      closePlus();
+    } else if (action === 'presets') {
+      showPresetView();
+    }
+  }
+
+  // 深度思考开关：仅选中 thinking:true 的模型可用
+  function renderThinkingRow() {
+    var toggle = document.getElementById('chatThinkingToggle');
+    var sub = document.getElementById('chatThinkingSub');
+    if (!toggle) return;
+    var supported = isThinkingModel();
+    var enabled = supported && !!chat().thinkingEnabled;
+    toggle.classList.toggle('on', enabled);
+    toggle.classList.toggle('disabled', !supported);
+    if (sub) {
+      sub.textContent = supported ? (enabled ? '已开启' : '已关闭') : '当前模型不支持';
+    }
+  }
+
+  function toggleThinking() {
+    if (!isThinkingModel()) {
+      Toast.show('当前模型不支持深度思考');
+      renderThinkingRow();
+      return;
+    }
+    var c = chat();
+    c.thinkingEnabled = !c.thinkingEnabled;
+    Store.save();
+    renderThinkingRow();
+    Toast.show(c.thinkingEnabled ? '已开启深度思考' : '已关闭深度思考');
+  }
+
+  /* ---------- 附件 ---------- */
+
+  function attId() {
+    attSeq++;
+    return 'att' + Date.now().toString(36) + '_' + attSeq;
+  }
+
+  // 图片附件：canvas 压缩到最长边 1024px JPEG 0.8，控制 localStorage 体积
+  function compressImageFile(file) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function() {
+        var img = new Image();
+        img.onload = function() {
+          var max = 1024;
+          var scale = Math.min(1, max / Math.max(img.width, img.height));
+          var w = Math.max(1, Math.round(img.width * scale));
+          var h = Math.max(1, Math.round(img.height * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = function() { reject(new Error('图片读取失败')); };
+        img.src = reader.result;
+      };
+      reader.onerror = function() { reject(new Error('文件读取失败')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function addImageFiles(fileList) {
+    var room = 4 - pendingAttachments.filter(function(a) { return a.kind === 'image'; }).length;
+    var files = [];
+    for (var i = 0; i < fileList.length && files.length < room; i++) files.push(fileList[i]);
+    if (fileList.length > files.length) Toast.show('图片最多添加 4 张');
+    if (!files.length) {
+      if (room <= 0) Toast.show('图片最多添加 4 张');
+      return;
+    }
+    var chain = Promise.resolve();
+    files.forEach(function(file) {
+      chain = chain.then(function() {
+        return compressImageFile(file).then(function(dataUrl) {
+          pendingAttachments.push({ id: attId(), kind: 'image', name: file.name || '图片', dataUrl: dataUrl });
+          renderAttachStrip();
+        }).catch(function() {
+          Toast.show('图片处理失败：' + (file.name || ''), 'error');
+        });
+      });
+    });
+  }
+
+  // 文本附件：读取文本内容，超过 8000 字截断并提示
+  function addTextFile(file) {
+    var reader = new FileReader();
+    reader.onload = function() {
+      var text = String(reader.result || '');
+      if (text.length > 8000) {
+        text = text.slice(0, 8000);
+        Toast.show('文件内容过长，已截取前 8000 字');
+      }
+      pendingAttachments.push({ id: attId(), kind: 'file', name: file.name || '文件', text: text });
+      renderAttachStrip();
+    };
+    reader.onerror = function() {
+      Toast.show('文件读取失败', 'error');
+    };
+    reader.readAsText(file);
+  }
+
+  function removeAttachment(id) {
+    for (var i = 0; i < pendingAttachments.length; i++) {
+      if (pendingAttachments[i].id === id) {
+        pendingAttachments.splice(i, 1);
+        break;
+      }
+    }
+    renderAttachStrip();
+  }
+
+  function renderAttachStrip() {
+    var strip = document.getElementById('chatAttachStrip');
+    if (!strip) return;
+    if (!pendingAttachments.length) {
+      strip.innerHTML = '';
+      strip.classList.add('hidden');
+      return;
+    }
+    strip.classList.remove('hidden');
+    var html = '';
+    for (var i = 0; i < pendingAttachments.length; i++) {
+      var a = pendingAttachments[i];
+      if (a.kind === 'image') {
+        html += '<div class="chat-attach-item"><img src="' + a.dataUrl + '" alt="' + esc(a.name) + '">';
+      } else {
+        html += '<div class="chat-attach-item chat-attach-file"><span class="chat-attach-file-icon">📄</span>' +
+          '<span class="chat-attach-file-name">' + esc(a.name) + '</span>';
+      }
+      html += '<button class="chat-attach-del" data-att-del="' + a.id + '">✕</button></div>';
+    }
+    strip.innerHTML = html;
+  }
+
+  /* ---------- 常用语 ---------- */
+
+  function presetList() {
+    var c = chat();
+    if (!c.presets) c.presets = [];
+    return c.presets;
+  }
+
+  function renderPresetList() {
+    var box = document.getElementById('chatPresetList');
+    if (!box) return;
+    var list = presetList();
+    var html = '';
+    if (!list.length) {
+      html = '<div class="chat-preset-empty">暂无常用语，点击下方新建</div>';
+    } else {
+      for (var i = 0; i < list.length; i++) {
+        var p = list[i];
+        html += '<div class="chat-preset-item" data-pid="' + p.id + '">';
+        html += '<div class="chat-preset-info">';
+        html += '<div class="chat-preset-title">' + esc(p.title) + '</div>';
+        html += '<div class="chat-preset-preview">' + esc((p.content || '').slice(0, 60)) + '</div>';
+        html += '</div>';
+        html += '<button class="chat-preset-del" data-del="' + p.id + '">🗑</button>';
+        html += '</div>';
+      }
+    }
+    box.innerHTML = html;
+  }
+
+  function addPreset() {
+    var titleInput = document.getElementById('chatPresetTitle');
+    var contentInput = document.getElementById('chatPresetContent');
+    if (!titleInput || !contentInput) return;
+    var title = titleInput.value.trim();
+    var content = contentInput.value.trim();
+    if (!title || !content) {
+      Toast.show('请填写标题和内容', 'error');
+      return;
+    }
+    presetList().push({ id: 'preset_' + Date.now().toString(36), title: title, content: content });
+    Store.save();
+    titleInput.value = '';
+    contentInput.value = '';
+    renderPresetList();
+    Toast.show('已保存常用语', 'success');
+  }
+
+  function deletePreset(id) {
+    var list = presetList();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) {
+        list.splice(i, 1);
+        break;
+      }
+    }
+    Store.save();
+    renderPresetList();
+  }
+
+  function applyPreset(id) {
+    var list = presetList();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) {
+        var input = document.getElementById('chatInput');
+        if (input) {
+          input.value = list[i].content;
+          autoGrow(input);
+          input.focus();
+        }
+        closePlus();
+        return;
+      }
+    }
+  }
+
+  /* ---------- 图片全屏查看 ---------- */
+
+  function openLightbox(src) {
+    closeLightbox();
+    var box = document.createElement('div');
+    box.className = 'chat-lightbox';
+    box.id = 'chatLightbox';
+    box.innerHTML = '<img src="' + src + '" alt="查看图片">';
+    box.addEventListener('click', function() { closeLightbox(); });
+    document.body.appendChild(box);
+  }
+
+  function closeLightbox() {
+    var box = document.getElementById('chatLightbox');
+    if (box && box.parentNode) box.parentNode.removeChild(box);
+  }
+
+  /* ---------- 语音播报 ---------- */
+
+  function ensureVoice() {
+    var c = chat();
+    if (!c.voice) {
+      c.voice = { engine: 'browser', voiceURI: '', ttsVoice: 'alloy', rate: 1, autoSpeak: false };
+    }
+    return c.voice;
+  }
+
+  function toggleSpeak(msgId) {
+    if (typeof Voice === 'undefined') return;
+    if (Voice.isSpeaking(msgId)) {
+      Voice.stopSpeak();
+      return;
+    }
+    var conv = currentConv();
+    if (!conv) return;
+    for (var i = 0; i < conv.messages.length; i++) {
+      if (conv.messages[i].id === msgId) {
+        Voice.speak(conv.messages[i].content || '', msgId);
+        return;
+      }
+    }
+  }
+
+  function updateSpeakButtons() {
+    var btns = document.querySelectorAll('.chat-speak-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var speaking = typeof Voice !== 'undefined' && Voice.isSpeaking(btns[i].dataset.speak);
+      btns[i].textContent = speaking ? '⏸' : '🔊';
+      btns[i].classList.toggle('speaking', speaking);
+    }
+  }
+
+  function previewVoice() {
+    if (typeof Voice === 'undefined') return;
+    if (Voice.isSpeaking()) {
+      Voice.stopSpeak();
+      return;
+    }
+    Voice.speak('你好，我是 OmniHub，这是语音播报试听。', 'preview');
+  }
+
+  // 设置页「语音播报」分区
+  function renderVoiceSettings(c) {
+    var vc = ensureVoice();
+    var engine = vc.engine || 'browser';
+    var html = '';
+    html += '<div class="settings-group">';
+    html += '<div class="settings-group-title">语音播报</div>';
+
+    // 引擎下拉
+    var openaiKey = (c.keys && c.keys.openai) || '';
+    html += '<div class="chat-param-row">';
+    html += '<div class="chat-param-label">引擎</div>';
+    html += '<select id="chatVoiceEngine" class="chat-voice-select">';
+    html += '<option value="browser"' + (engine === 'browser' ? ' selected' : '') + '>浏览器内置</option>';
+    html += '<option value="openai"' + (engine === 'openai' ? ' selected' : '') + '>OpenAI TTS' + (openaiKey ? '' : '（未配置 Key）') + '</option>';
+    html += '</select></div>';
+
+    // 音色下拉
+    html += '<div class="chat-param-row">';
+    html += '<div class="chat-param-label">音色</div>';
+    html += '<select id="chatVoiceName" class="chat-voice-select">';
+    if (engine === 'openai') {
+      var voices = (typeof Voice !== 'undefined') ? Voice.OPENAI_VOICES : ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+      for (var i = 0; i < voices.length; i++) {
+        html += '<option value="' + voices[i] + '"' + (vc.ttsVoice === voices[i] ? ' selected' : '') + '>' + voices[i] + '</option>';
+      }
+    } else {
+      var local = (typeof Voice !== 'undefined') ? Voice.getVoices(true) : [];
+      if (!local.length) {
+        html += '<option value="">系统默认</option>';
+      } else {
+        for (var j = 0; j < local.length; j++) {
+          html += '<option value="' + esc(local[j].voiceURI) + '"' + (vc.voiceURI === local[j].voiceURI ? ' selected' : '') + '>' + esc(local[j].name) + '</option>';
+        }
+      }
+    }
+    html += '</select></div>';
+
+    // 语速滑块
+    html += '<div class="chat-param-row">';
+    html += '<div class="chat-param-label">语速 <span id="chatVoiceRateValue">' + (vc.rate || 1).toFixed(1) + '</span></div>';
+    html += '<input type="range" id="chatVoiceRate" min="0.5" max="2" step="0.1" value="' + (vc.rate || 1) + '">';
+    html += '</div>';
+
+    // 试听 + 自动播报
+    html += '<div class="chat-voice-row">';
+    html += '<button class="btn-secondary" id="chatVoicePreview">🔊 试听</button>';
+    html += '<div class="chat-voice-auto"><span>自动播报</span><div class="toggle-switch' + (vc.autoSpeak ? ' on' : '') + '" id="chatAutoSpeakToggle"></div></div>';
+    html += '</div>';
+    html += '</div>';
+    return html;
   }
 
   /* ---------- 工具 ---------- */
