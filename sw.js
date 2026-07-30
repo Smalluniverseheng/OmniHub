@@ -1,4 +1,4 @@
-const VERSION = 'v7.0';
+const VERSION = 'v7.1';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [
@@ -11,6 +11,9 @@ const ASSETS = [
   '/js/modules/profile.js',
   '/js/modules/read.js',
   '/js/modules/reader.js',
+  '/js/modules/chat.js',
+  '/js/modules/novel-reader.js',
+  '/js/changelog.js',
   '/js/venera-engine.js',
   '/js/providers.js',
   '/assets/brand.jpg',
