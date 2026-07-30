@@ -52,26 +52,10 @@ const ReadModule = (() => {
 
   function bindEvents() {
     // Tab 切换
-    document.addEventListener('click', e => {
-      const tab = e.target.closest('.read-tab');
-      if (tab) {
-        currentTab = tab.dataset.tab;
-        document.querySelectorAll('.read-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === currentTab));
-        const shelf = Store.state.read.shelf;
-        $('shelfGrid').innerHTML = renderShelfItems(shelf);
-      }
-    });
+    // Tab 切换通过事件委托在 bindGlobalEvents 中处理
 
     // 书架点击
-    document.addEventListener('click', e => {
-      const item = e.target.closest('.shelf-item');
-      if (item) {
-        const url = item.dataset.url;
-        const book = Store.state.read.shelf.find(b => b.url === url);
-        if (!book) return;
-        openBook(book);
-      }
-    });
+    // 书架点击通过事件委托处理
 
     // 搜索按钮
     const searchBtn = $('readSearchBtn');
