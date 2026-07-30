@@ -6,38 +6,11 @@ const ChatModule = (() => {
   var currentId = null;
   var aborter = null;
   var sending = false;
-  var modelTab = 'chat';
+  var modelTab = 'all';
   var modelSearch = '';
+  var quickChecking = false;
 
   var SUGGESTIONS = ['帮我制定一周学习计划', '解释一下什么是量子纠缠', '推荐三部高分科幻电影'];
-
-  var MODEL_DESCS = {
-    'gpt-4o': 'OpenAI 旗舰多模态模型',
-    'gpt-4o-mini': '轻量快速，性价比高',
-    'gpt-4.1': '新一代编码与推理增强',
-    'o4-mini': '推理模型，擅长数理逻辑',
-    'deepseek-chat': 'DeepSeek V3 通用对话',
-    'deepseek-reasoner': 'R1 深度思考推理模型',
-    'moonshot-v1-8k': 'Kimi 短上下文模型',
-    'moonshot-v1-32k': 'Kimi 长上下文模型',
-    'kimi-k2-0905-preview': 'Kimi K2 最新旗舰',
-    'qwen-plus': '阿里通义均衡型',
-    'qwen-turbo': '阿里通义极速型',
-    'qwen-max': '阿里通义最强旗舰',
-    'glm-4-plus': '智谱旗舰，中文能力强',
-    'glm-4-air': '智谱轻量高速',
-    'glm-4-flash': '智谱免费快速模型',
-    'doubao-seed-1-6-250615': '字节豆包新一代旗舰',
-    'doubao-1-5-pro-32k-250115': '豆包专业版 32K',
-    'grok-3': 'xAI 旗舰模型',
-    'grok-3-mini': 'xAI 轻量快速',
-    'llama-3.3-70b-versatile': 'Meta 开源大模型 · Groq 加速',
-    'llama-3.1-8b-instant': '轻量即时响应 · Groq 加速',
-    'claude-sonnet-4-5': 'Anthropic 旗舰，编码写作强',
-    'claude-haiku-4-5': 'Anthropic 轻量高速',
-    'gemini-2.5-flash': 'Google 快速多模态',
-    'gemini-2.5-pro': 'Google 最强推理模型'
-  };
 
   /* ---------- 数据访问 ---------- */
 
@@ -101,7 +74,10 @@ const ChatModule = (() => {
     // 顶栏
     html += '<div class="chat-topbar">';
     html += '<button class="chat-topbar-btn" id="chatHistoryBtn" title="对话历史">☰</button>';
+    html += '<div class="chat-topbar-mid">';
     html += '<button class="chat-model-pill" id="chatModelPill"></button>';
+    html += '<button class="chat-topbar-btn chat-settings-gear" id="chatSettingsBtn" title="API 配置">⚙</button>';
+    html += '</div>';
     html += '<button class="chat-topbar-btn" id="chatNewBtn" title="新对话">＋</button>';
     html += '</div>';
     // 消息区
@@ -136,6 +112,14 @@ const ChatModule = (() => {
       pill.addEventListener('click', function() {
         renderModelPage();
         App.openSub('subChatModel');
+      });
+    }
+
+    var settingsGear = document.getElementById('chatSettingsBtn');
+    if (settingsGear) {
+      settingsGear.addEventListener('click', function() {
+        renderSettings();
+        App.openSub('subChatSettings');
       });
     }
 
@@ -205,12 +189,12 @@ const ChatModule = (() => {
         }
         var row = e.target.closest('.chat-model-row');
         if (row && !row.classList.contains('disabled')) {
-          selectModel(row.dataset.provider, row.dataset.model, row.dataset.mode);
+          if (row.dataset.mid) {
+            selectCatalogModel(row.dataset.mid);
+          } else {
+            selectModel(row.dataset.provider, row.dataset.model, row.dataset.mode);
+          }
           return;
-        }
-        if (e.target.closest('#chatOpenSettings')) {
-          renderSettings();
-          App.openSub('subChatSettings');
         }
       });
       modelBody.addEventListener('input', function(e) {
@@ -244,6 +228,10 @@ const ChatModule = (() => {
             c.maxTokens = v;
             Store.save();
           }
+        } else if (t.id === 'chatQuickKey') {
+          // 按前缀自动选中猜测厂商
+          var sel = document.getElementById('chatQuickProvider');
+          if (sel) sel.value = AIProviders.guessKeyProvider(t.value);
         }
       });
       settingsBody.addEventListener('click', function(e) {
@@ -254,6 +242,10 @@ const ChatModule = (() => {
             input.type = input.type === 'password' ? 'text' : 'password';
             toggle.textContent = input.type === 'password' ? '👁' : '🙈';
           }
+          return;
+        }
+        if (e.target.closest('#chatQuickBtn')) {
+          doQuickCheck();
           return;
         }
         if (e.target.closest('#chatClearAll')) {
@@ -267,6 +259,59 @@ const ChatModule = (() => {
         }
       });
     }
+  }
+
+  // 一键配置：识别厂商 + 检测有效性，成功才写入
+  function doQuickCheck() {
+    if (quickChecking) return;
+    var keyInput = document.getElementById('chatQuickKey');
+    var baseInput = document.getElementById('chatQuickBase');
+    var sel = document.getElementById('chatQuickProvider');
+    var btn = document.getElementById('chatQuickBtn');
+    if (!keyInput || !sel) return;
+    var key = keyInput.value.trim();
+    if (!key) {
+      Toast.show('请先粘贴 API Key', 'error');
+      return;
+    }
+    var slug = sel.value;
+    var base = baseInput ? baseInput.value.trim() : '';
+    var p = AIProviders.get(slug);
+
+    quickChecking = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="chat-spin"></span>检测中…';
+    }
+
+    AIAPI.validateKey(slug, key, base).then(function(res) {
+      quickChecking = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '识别并检测';
+      }
+      if (res.ok) {
+        var c = chat();
+        if (!c.keys) c.keys = {};
+        c.keys[slug] = key;
+        if (slug === 'custom' && base) c.customBase = base.replace(/\/+$/, '');
+        Store.save();
+        if (res.models && res.models.length) {
+          console.log('[OmniHub] ' + (p ? p.name : slug) + ' 可用模型(' + res.models.length + '):', res.models);
+        }
+        Toast.show('✓ 验证有效，已配置 ' + (p ? p.name : slug), 'success');
+        renderSettings();
+      } else {
+        Toast.show('✗ Key 无效或接口不可达：' + (res.error || '未知原因'), 'error');
+      }
+    }).catch(function(err) {
+      quickChecking = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '识别并检测';
+      }
+      Toast.show('✗ Key 无效或接口不可达：' + ((err && err.message) || '网络错误'), 'error');
+    });
   }
 
   // Kimi 式滑动历史：左边缘 30px 起手，右滑 >80px 且纵向位移 <60px
@@ -307,7 +352,8 @@ const ChatModule = (() => {
     if (!pill) return;
     var p = currentProvider();
     var color = (p && p.color) || '#6366F1';
-    var label = effectiveModel() || '选择模型';
+    var entry = currentModelEntry();
+    var label = (entry && (entry.name || entry.id)) || effectiveModel() || '选择模型';
     if (chat().mode === 'image') label += ' · 绘画';
     pill.innerHTML = '<span class="chat-provider-dot" style="background:' + color + '"></span>' +
       '<span class="chat-pill-txt">' + esc(label) + '</span>';
@@ -330,12 +376,14 @@ const ChatModule = (() => {
   }
 
   function renderWelcome() {
-    var name = effectiveModel() || 'AI';
+    var entry = currentModelEntry();
+    var name = (entry && (entry.name || entry.id)) || effectiveModel() || 'AI';
     var isImage = chat().mode === 'image';
+    var sub = isImage ? '描述你想要的画面，我来帮你画' : (entry ? modelDesc(entry) : '有什么可以帮你的吗？');
     var html = '<div class="chat-welcome">';
     html += '<div class="chat-welcome-icon">' + (isImage ? '🎨' : '✦') + '</div>';
     html += '<div class="chat-welcome-text">你好，我是 ' + esc(name) + '</div>';
-    html += '<div class="chat-welcome-sub">' + (isImage ? '描述你想要的画面，我来帮你画' : '有什么可以帮你的吗？') + '</div>';
+    html += '<div class="chat-welcome-sub">' + esc(sub) + '</div>';
     if (!isImage) {
       html += '<div class="chat-suggest">';
       for (var i = 0; i < SUGGESTIONS.length; i++) {
@@ -670,101 +718,204 @@ const ChatModule = (() => {
     body.innerHTML = html;
   }
 
-  /* ---------- 模型选择子页面 ---------- */
+  /* ---------- 模型选择子页面（流光风格） ---------- */
+
+  // 厂商徽标：颜色 + 首字缩写（未映射厂商用名称哈希取色）
+  function providerMeta(name) {
+    var slug = AIProviders.mapModelProvider(name);
+    var p = AIProviders.get(slug);
+    var color = (p && slug !== 'custom') ? p.color : hashColor(name || '?');
+    var n = String(name || '?');
+    var first = n.charAt(0);
+    var abbr = /[a-zA-Z]/.test(first) ? first.toUpperCase() : first;
+    return { color: color, abbr: abbr, slug: slug };
+  }
+
+  function hashColor(name) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+    return 'hsl(' + h + ',55%,45%)';
+  }
+
+  // 一行简介：ctx / vision / thinking 拼接
+  function modelDesc(m) {
+    var parts = [];
+    if (m.ctx) parts.push(m.ctx >= 1024 ? Math.round(m.ctx / 10.24) + '万上下文' : m.ctx + 'K上下文');
+    if (m.vision) parts.push('支持视觉');
+    if (m.thinking) parts.push('深度思考');
+    if (parts.length) return parts.join(' · ');
+    return m.desc || m.provider || 'AI 模型';
+  }
+
+  function currentModelEntry() {
+    if (typeof AIModels === 'undefined') return null;
+    var c = chat();
+    return AIModels.get(c.modelId || c.model);
+  }
 
   function renderModelPage() {
     var body = document.getElementById('chatModelBody');
     if (!body) return;
+    var tabs = [
+      { id: 'all', name: '全部' },
+      { id: 'chat', name: '聊天' },
+      { id: 'image', name: '图片' },
+      { id: 'video', name: '视频' }
+    ];
     var html = '';
     html += '<div class="chat-model-tabs">';
-    html += '<button class="chat-model-tab' + (modelTab === 'chat' ? ' active' : '') + '" data-mtab="chat">聊天</button>';
-    html += '<button class="chat-model-tab' + (modelTab === 'image' ? ' active' : '') + '" data-mtab="image">图片</button>';
-    html += '<button class="chat-model-tab' + (modelTab === 'video' ? ' active' : '') + '" data-mtab="video">视频</button>';
+    for (var i = 0; i < tabs.length; i++) {
+      html += '<button class="chat-model-tab' + (modelTab === tabs[i].id ? ' active' : '') + '" data-mtab="' + tabs[i].id + '">' + tabs[i].name + '</button>';
+    }
     html += '</div>';
-    html += '<div class="chat-model-search"><input type="text" id="chatModelSearch" placeholder="搜索模型或厂商..." value="' + esc(modelSearch) + '"></div>';
+    html += '<div class="chat-model-search"><input type="text" id="chatModelSearch" placeholder="搜索模型或功能" value="' + esc(modelSearch) + '"></div>';
     html += '<div id="chatModelList"></div>';
-    html += '<div class="chat-settings-link" id="chatOpenSettings">⚙ 对话设置（API Key / 参数）</div>';
     body.innerHTML = html;
     renderModelList();
   }
 
-  function matchSearch() {
-    var args = arguments;
-    if (!modelSearch) return true;
-    for (var i = 0; i < args.length; i++) {
-      if ((args[i] || '').toLowerCase().indexOf(modelSearch) !== -1) return true;
-    }
-    return false;
+  function catalogRowHtml(m) {
+    var c = chat();
+    var meta = providerMeta(m.provider);
+    // 仅非对话类型（tts/asr 等）不可选；已下架仅标记仍可点选
+    var disabled = m.type !== 'chat' && m.type !== 'image' && m.type !== 'video';
+    var active = !disabled && c.mode !== 'image' && (c.modelId === m.id || (!c.modelId && c.model === m.id && c.provider === meta.slug));
+    var html = '<div class="chat-model-row' + (active ? ' active' : '') + (disabled ? ' disabled' : '') + '" data-mid="' + esc(m.id) + '">';
+    html += '<div class="chat-model-icon" style="background:' + meta.color + '">' + esc(meta.abbr) + '</div>';
+    html += '<div class="chat-model-info">';
+    html += '<div class="chat-model-name">' + esc(m.name || m.id) + '</div>';
+    var desc = modelDesc(m);
+    if (disabled) desc += ' · ' + esc(m.type);
+    else if (m.status === 'deprecated') desc += ' · 已下架';
+    html += '<div class="chat-model-desc">' + esc(desc) + '</div>';
+    html += '</div>';
+    if (active) html += '<div class="chat-model-check">✓</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function filterSearch(list) {
+    if (!modelSearch) return list;
+    return list.filter(function(m) {
+      return (m.id || '').toLowerCase().indexOf(modelSearch) !== -1 ||
+        (m.name || '').toLowerCase().indexOf(modelSearch) !== -1 ||
+        (m.provider || '').toLowerCase().indexOf(modelSearch) !== -1 ||
+        (m.desc || '').toLowerCase().indexOf(modelSearch) !== -1;
+    });
   }
 
   function renderModelList() {
     var box = document.getElementById('chatModelList');
     if (!box) return;
     var c = chat();
-    var providers = AIProviders.list();
     var html = '';
-    var i, j;
+    var i;
 
-    if (modelTab === 'chat') {
-      for (i = 0; i < providers.length; i++) {
-        var p = providers[i];
-        var models = p.keySlug === 'custom' ? [c.customModel || ''] : p.models;
-        var rowsHtml = '';
-        for (j = 0; j < models.length; j++) {
-          var m = models[j];
-          if (!m) continue;
-          if (!matchSearch(p.name, m)) continue;
-          var active = c.mode === 'chat' && c.provider === p.keySlug && effectiveModel() === m;
-          rowsHtml += '<div class="chat-model-row' + (active ? ' active' : '') + '" data-provider="' + p.keySlug + '" data-model="' + esc(m) + '" data-mode="chat">';
-          rowsHtml += '<div class="chat-model-name">' + esc(m) + '</div>';
-          rowsHtml += '<div class="chat-model-desc">' + esc(MODEL_DESCS[m] || (p.keySlug === 'custom' ? '自定义 OpenAI 兼容接口' : 'AI 对话模型')) + '</div>';
-          rowsHtml += '</div>';
-        }
-        if (!rowsHtml) continue;
-        html += '<div class="chat-provider-group">';
-        html += '<div class="chat-provider-head"><span class="chat-provider-dot" style="background:' + p.color + '"></span>' + esc(p.name) + '</div>';
-        html += rowsHtml;
-        html += '</div>';
-      }
-      if (!html) html = '<div class="empty-state"><div class="empty-text">没有匹配的模型</div></div>';
-    } else if (modelTab === 'image') {
-      var hasAny = false;
-      for (i = 0; i < providers.length; i++) {
-        var ip = providers[i];
-        if (!ip.imageModel) continue;
-        if (!matchSearch(ip.name, ip.imageModel)) continue;
-        hasAny = true;
-        var iActive = c.mode === 'image' && c.provider === ip.keySlug;
-        html += '<div class="chat-provider-group">';
-        html += '<div class="chat-provider-head"><span class="chat-provider-dot" style="background:' + ip.color + '"></span>' + esc(ip.name) + '</div>';
-        html += '<div class="chat-model-row' + (iActive ? ' active' : '') + '" data-provider="' + ip.keySlug + '" data-model="' + esc(ip.imageModel) + '" data-mode="image">';
-        html += '<div class="chat-model-name">' + esc(ip.imageModel) + '</div>';
-        html += '<div class="chat-model-desc">文生图模型 · 发送消息直接出图</div>';
+    if (modelTab === 'video') {
+      // 视频 Tab：目录中的 video 模型全部灰显「即将上线」
+      html += '<div class="chat-video-coming">🎬 视频生成即将上线</div>';
+      var videos = typeof AIModels !== 'undefined' ? filterSearch(AIModels.byType('video')) : [];
+      for (i = 0; i < videos.length; i++) {
+        var v = videos[i];
+        var vMeta = providerMeta(v.provider);
+        html += '<div class="chat-model-row disabled">';
+        html += '<div class="chat-model-icon" style="background:' + vMeta.color + '">' + esc(vMeta.abbr) + '</div>';
+        html += '<div class="chat-model-info">';
+        html += '<div class="chat-model-name">' + esc(v.name || v.id) + '</div>';
+        html += '<div class="chat-model-desc">' + esc(modelDesc(v)) + ' · 即将上线</div>';
         html += '</div></div>';
       }
-      if (!hasAny) html = '<div class="empty-state"><div class="empty-text">没有匹配的图片模型</div></div>';
-    } else {
-      // 视频 Tab：占位
-      html += '<div class="chat-video-coming">🎬 视频生成即将上线</div>';
       var planned = [
         { name: 'Sora', desc: 'OpenAI 视频生成模型' },
         { name: '可灵', desc: '快手视频生成模型' },
         { name: 'Vidu', desc: '生数科技视频生成模型' }
       ];
       for (i = 0; i < planned.length; i++) {
+        if (modelSearch && planned[i].name.toLowerCase().indexOf(modelSearch) === -1 && planned[i].desc.toLowerCase().indexOf(modelSearch) === -1) continue;
         html += '<div class="chat-model-row disabled">';
+        html += '<div class="chat-model-icon" style="background:#3a3a40">🎬</div>';
+        html += '<div class="chat-model-info">';
         html += '<div class="chat-model-name">' + planned[i].name + '</div>';
-        html += '<div class="chat-model-desc">' + planned[i].desc + ' · 规划中</div>';
+        html += '<div class="chat-model-desc">' + planned[i].desc + ' · 即将上线</div>';
+        html += '</div></div>';
+      }
+    } else if (modelTab === 'image') {
+      var hasAny = false;
+      if (typeof AIModels !== 'undefined') {
+        var images = filterSearch(AIModels.byType('image'));
+        for (i = 0; i < images.length; i++) { html += catalogRowHtml(images[i]); hasAny = true; }
+      }
+      var providers = AIProviders.list();
+      for (i = 0; i < providers.length; i++) {
+        var ip = providers[i];
+        if (!ip.imageModel) continue;
+        if (modelSearch && ip.name.toLowerCase().indexOf(modelSearch) === -1 && ip.imageModel.toLowerCase().indexOf(modelSearch) === -1) continue;
+        hasAny = true;
+        var iActive = c.mode === 'image' && c.provider === ip.keySlug;
+        html += '<div class="chat-model-row' + (iActive ? ' active' : '') + '" data-provider="' + ip.keySlug + '" data-model="' + esc(ip.imageModel) + '" data-mode="image">';
+        html += '<div class="chat-model-icon" style="background:' + ip.color + '">' + esc(ip.name.charAt(0).toUpperCase()) + '</div>';
+        html += '<div class="chat-model-info">';
+        html += '<div class="chat-model-name">' + esc(ip.imageModel) + '</div>';
+        html += '<div class="chat-model-desc">文生图模型 · 发送消息直接出图</div>';
+        html += '</div>';
+        if (iActive) html += '<div class="chat-model-check">✓</div>';
         html += '</div>';
       }
+      if (!hasAny) html = '<div class="empty-state"><div class="empty-text">没有匹配的图片模型</div></div>';
+    } else {
+      // 全部 / 聊天
+      var models = [];
+      if (typeof AIModels !== 'undefined') {
+        models = modelTab === 'chat' ? AIModels.byType('chat') : AIModels.list();
+        models = filterSearch(models);
+      }
+      // 自定义接口模型置顶（已配置时）
+      if (c.customModel && (!modelSearch || c.customModel.toLowerCase().indexOf(modelSearch) !== -1)) {
+        var cActive = c.mode !== 'image' && c.provider === 'custom' && !c.modelId;
+        html += '<div class="chat-model-row' + (cActive ? ' active' : '') + '" data-provider="custom" data-model="' + esc(c.customModel) + '" data-mode="chat">';
+        html += '<div class="chat-model-icon" style="background:#8B5CF6">自</div>';
+        html += '<div class="chat-model-info">';
+        html += '<div class="chat-model-name">' + esc(c.customModel) + '</div>';
+        html += '<div class="chat-model-desc">自定义 OpenAI 兼容接口</div>';
+        html += '</div>';
+        if (cActive) html += '<div class="chat-model-check">✓</div>';
+        html += '</div>';
+      }
+      for (i = 0; i < models.length; i++) html += catalogRowHtml(models[i]);
+      if (!html) html = '<div class="empty-state"><div class="empty-text">没有匹配的模型</div></div>';
     }
     box.innerHTML = html;
+  }
+
+  // 选中模型目录条目：映射厂商并写入 Store
+  function selectCatalogModel(mid) {
+    if (typeof AIModels === 'undefined') return;
+    var m = AIModels.get(mid);
+    if (!m) return;
+    var c = chat();
+    var slug = AIProviders.mapModelProvider(m.provider);
+    c.modelId = m.id;
+    if (m.type === 'image') c.mode = 'image';
+    else c.mode = 'chat';
+    if (slug === 'custom') {
+      c.provider = 'custom';
+      c.customModel = m.id;
+    } else {
+      c.provider = slug;
+      c.model = m.id;
+    }
+    Store.save();
+    renderModelPill();
+    renderMessages();
+    App.closeSub();
+    Toast.show('已切换到 ' + (m.name || m.id));
   }
 
   function selectModel(providerSlug, model, mode) {
     var c = chat();
     c.provider = providerSlug;
     c.mode = mode;
+    c.modelId = '';
     if (mode === 'chat') c.model = model;
     Store.save();
     renderModelPill();
@@ -784,7 +935,25 @@ const ChatModule = (() => {
     var html = '';
     var i;
 
-    // API 密钥
+    // 一键配置：粘贴 Key 自动识别厂商并检测
+    html += '<div class="settings-group">';
+    html += '<div class="settings-group-title">一键配置</div>';
+    html += '<div class="chat-quick-card">';
+    html += '<textarea id="chatQuickKey" rows="2" placeholder="粘贴 API Key，自动识别厂商"></textarea>';
+    html += '<input type="text" id="chatQuickBase" placeholder="接口地址(可选，默认官方)">';
+    html += '<div class="chat-quick-row">';
+    html += '<select id="chatQuickProvider">';
+    for (i = 0; i < providers.length; i++) {
+      html += '<option value="' + providers[i].keySlug + '"' + (providers[i].keySlug === 'openai' ? ' selected' : '') + '>' + esc(providers[i].name) + '</option>';
+    }
+    html += '</select>';
+    html += '<button class="btn-primary chat-quick-btn" id="chatQuickBtn">识别并检测</button>';
+    html += '</div></div></div>';
+
+    // 分别配置（折叠）：各家 Key 单独输入
+    html += '<details class="chat-manual">';
+    html += '<summary>分别配置</summary>';
+
     html += '<div class="settings-group">';
     html += '<div class="settings-group-title">API 密钥</div>';
     for (i = 0; i < providers.length; i++) {
@@ -818,6 +987,8 @@ const ChatModule = (() => {
     html += '<button class="chat-key-toggle" type="button">👁</button>';
     html += '</div></div>';
     html += '</div>';
+
+    html += '</details>';
 
     // 生成参数
     html += '<div class="settings-group">';
