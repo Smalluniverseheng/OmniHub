@@ -75,6 +75,17 @@ const NovelReader = (() => {
         } else {
           content = '<p>无法加载内容</p>';
         }
+      } else if (state.sourceType === 'legado' && typeof LegadoEngine !== 'undefined') {
+        // Legado 书源 - 按规则获取章节内容
+        var lsrc = (Store.state.read.sources || []).find(function(s) { return s.name === state.source || s.key === state.source || s.id === state.source; });
+        if (!lsrc || !lsrc.raw) throw new Error('Legado 书源不存在');
+        var res = await LegadoEngine.getContent(lsrc.raw, { name: ch.name, url: ch.url });
+        if (res.type === 'images') {
+          // 章节实为图片内容，以图片形式展示
+          content = res.images.map(function(u) { return '<img src="' + esc(u) + '" style="max-width:100%;display:block;margin:0 auto;" loading="lazy">'; }).join('');
+        } else {
+          content = res.text.split('\n').filter(function(l) { return l.trim(); }).map(function(l) { return '<p>' + esc(l) + '</p>'; }).join('');
+        }
       } else {
         // 普通 CSS 书源 - 抓取章节内容
         content = await fetchNovelContent(ch.url);
