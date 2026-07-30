@@ -1,3 +1,3 @@
-const APP_VERSION = '7.7';
+const APP_VERSION = '7.8';
 const APP_NAME = 'OmniHub';
 const APP_DESC = 'All-in-one aggregation platform';
