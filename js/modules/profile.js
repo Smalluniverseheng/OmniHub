@@ -158,12 +158,16 @@ const ProfileModule = (() => {
 
     let html = '';
 
-    // 用户信息卡片
-    html += '<div class="profile-card">';
-    html += '<div class="profile-avatar">' + (user.isLogged && user.username ? user.username.charAt(0).toUpperCase() : '👤') + '</div>';
-    html += '<div class="profile-name">' + (user.isLogged && user.username ? user.username : t('notLogged')) + '</div>';
-    html += '<div class="profile-meta">' + (user.isLogged && user.email ? user.email : t('loginToSync')) + '</div>';
-    if (user.isLogged && user.memberLevel > 0) {
+    // 用户信息卡片（点击进会员中心）
+    var displayName = user.isLogged ? (user.nickname || user.username || user.email || t('loggedIn')) : t('notLogged');
+    html += '<div class="profile-card" data-sub="subMemberCenter" style="cursor:pointer;">';
+    html += '<div class="profile-avatar">' + (user.isLogged && displayName ? esc(displayName.charAt(0).toUpperCase()) : '👤') + '</div>';
+    html += '<div class="profile-name">' + esc(displayName) + '</div>';
+    html += '<div class="profile-meta">' + (user.isLogged && user.email ? esc(user.email) : t('loginToSync')) + '</div>';
+    if (user.isLogged) {
+      var tier = tierOf(user.role);
+      html += '<span class="badge" style="background:' + tier.color + '">' + tier.icon + ' ' + tier.name + '</span>';
+    } else if (user.memberLevel > 0) {
       var levels = ['免费', '会员', '高级会员'];
       html += '<span class="profile-vip">' + levels[user.memberLevel] + '</span>';
     }
@@ -218,7 +222,7 @@ const ProfileModule = (() => {
     html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div></div>';
     html += '<div class="settings-row">';
     html += '<div class="settings-row-left"><div class="settings-row-icon">📦</div><span class="settings-row-text">OmniHub</span></div>';
-    html += '<div class="settings-row-right">v7.7</div></div>';
+    html += '<div class="settings-row-right">v7.8</div></div>';
     html += '</div>';
 
     body.innerHTML = html;
@@ -271,6 +275,12 @@ const ProfileModule = (() => {
           Store.save();
           Toast.show(on ? I18n.t('saved') : I18n.t('saved'));
         }
+        if (toggle.id === 'mcCloudSyncToggle') {
+          Store.state.user.cloudSync = on;
+          Store.save();
+          Toast.show(on ? '云同步已开启' : '云同步已关闭');
+          if (on && typeof SB !== 'undefined') SB.Sync.schedulePush();
+        }
         return;
       }
 
@@ -285,72 +295,339 @@ const ProfileModule = (() => {
     });
   }
 
+  /* ==================== 会员中心 ==================== */
+
+  // 六级会员体系
+  var TIER_MAP = {
+    guest:    { name: '游客',     icon: '🌑', color: '#6B7280', grad: 'linear-gradient(135deg,#374151,#6B7280)' },
+    user:     { name: '普通会员', icon: '🛰️', color: '#3B82F6', grad: 'linear-gradient(135deg,#1D4ED8,#3B82F6)' },
+    advanced: { name: '进阶会员', icon: '🪐', color: '#8B5CF6', grad: 'linear-gradient(135deg,#6D28D9,#8B5CF6)' },
+    vip:      { name: 'VIP',      icon: '☀️', color: '#F59E0B', grad: 'linear-gradient(135deg,#D97706,#FBBF24)' },
+    agent:    { name: '代理',     icon: '🌌', color: '#EC4899', grad: 'linear-gradient(135deg,#BE185D,#EC4899)' },
+    admin:    { name: '管理员',   icon: '🌠', color: '#EF4444', grad: 'linear-gradient(135deg,#B91C1C,#F97316)' }
+  };
+
+  function tierOf(role) { return TIER_MAP[role] || TIER_MAP.guest; }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function formatDate(ts) {
+    if (!ts) return '长期有效';
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return '长期有效';
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function formatDateTime(ts) {
+    if (!ts) return '从未同步';
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return '从未同步';
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function validEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+
   function renderMemberCenter() {
     var body = document.getElementById('memberCenterBody');
     if (!body) return;
-    var user = Store.state.user;
-    var t = I18n.t.bind(I18n);
+    if (Store.state.user.isLogged) renderMcLoggedIn(body);
+    else renderMcGuest(body);
+  }
 
+  /* ---------- 未登录态：品牌区 + 登录/注册 + 游客模式 ---------- */
+  function renderMcGuest(body) {
     var html = '';
-    html += '<div class="profile-card" style="text-align:center;">';
-    html += '<div class="profile-avatar" style="margin:0 auto 12px;">' + (user.isLogged && user.username ? user.username.charAt(0).toUpperCase() : '👤') + '</div>';
-    html += '<div class="profile-name">' + (user.isLogged && user.username ? user.username : t('notLogged')) + '</div>';
-    html += '<div class="profile-meta">' + (user.isLogged && user.email ? user.email : t('loginToSync')) + '</div>';
-    if (user.isLogged && user.memberLevel > 0) {
-      var levels = ['免费', '会员', '高级会员'];
-      html += '<span class="profile-vip">' + levels[user.memberLevel] + '</span>';
-    }
+
+    // 品牌区
+    html += '<div class="mc-brand">';
+    html += '<div class="mc-brand-logo">👑</div>';
+    html += '<div class="mc-brand-name">OmniHub 会员中心</div>';
+    html += '<div class="mc-brand-slogan">登录后同步数据 · 卡密激活会员等级</div>';
     html += '</div>';
 
-    if (!user.isLogged) {
-      html += '<div class="settings-group">';
-      html += '<div class="settings-group-title">' + t('login') + '</div>';
-      html += '<div class="login-form">';
-      html += '<input type="text" id="loginUsername" placeholder="' + t('username') + '" class="input-field">';
-      html += '<input type="password" id="loginPassword" placeholder="' + t('password') + '" class="input-field">';
-      html += '<button id="loginBtn" class="btn-primary">' + t('login') + '</button>';
-      html += '<button id="registerBtn" class="btn-secondary">' + t('register') + '</button>';
-      html += '</div></div>';
-    } else {
-      html += '<div class="settings-group">';
-      html += '<div class="settings-group-title">' + t('account') + '</div>';
-      html += '<div class="settings-row" id="logoutRow"><div class="settings-row-left"><div class="settings-row-icon">🚪</div><span class="settings-row-text">' + t('logout') + '</span></div></div>';
-      html += '</div>';
-    }
+    // 登录 / 注册 Tab 卡片
+    html += '<div class="settings-group" style="padding:16px;">';
+    html += '<div class="auth-tabs">';
+    html += '<div class="auth-tab active" id="mcTabLogin">登录</div>';
+    html += '<div class="auth-tab" id="mcTabRegister">注册</div>';
+    html += '</div>';
+    html += '<div id="mcLoginForm">';
+    html += '<input type="email" id="mcLoginEmail" placeholder="邮箱" class="input-field" autocomplete="email">';
+    html += '<input type="password" id="mcLoginPassword" placeholder="密码" class="input-field" autocomplete="current-password">';
+    html += '<div class="auth-error" id="mcLoginError"></div>';
+    html += '<button id="mcLoginBtn" class="btn-primary">登录</button>';
+    html += '</div>';
+    html += '<div id="mcRegisterForm" class="hidden">';
+    html += '<input type="text" id="mcRegNickname" placeholder="昵称" class="input-field" autocomplete="nickname">';
+    html += '<input type="email" id="mcRegEmail" placeholder="邮箱" class="input-field" autocomplete="email">';
+    html += '<input type="password" id="mcRegPassword" placeholder="密码（至少 6 位）" class="input-field" autocomplete="new-password">';
+    html += '<input type="password" id="mcRegPassword2" placeholder="确认密码" class="input-field" autocomplete="new-password">';
+    html += '<div class="auth-error" id="mcRegError"></div>';
+    html += '<button id="mcRegBtn" class="btn-primary">注册</button>';
+    html += '</div>';
+    html += '</div>';
+
+    // 游客模式
+    html += '<div class="auth-link" id="mcGuestLink">游客模式继续使用 ›</div>';
 
     body.innerHTML = html;
 
-    var loginBtn = document.getElementById('loginBtn');
-    if (loginBtn) {
-      loginBtn.addEventListener('click', function() {
-        var username = document.getElementById('loginUsername').value.trim();
-        var password = document.getElementById('loginPassword').value;
-        if (!username || !password) return Toast.show(t('fillAll'), 'error');
-        Store.state.user = { isLogged: true, username: username, email: username + '@omnihub.app', token: 'demo', memberLevel: 0, memberExpire: 0, cloudSync: false };
+    var tabLogin = document.getElementById('mcTabLogin');
+    var tabRegister = document.getElementById('mcTabRegister');
+    var formLogin = document.getElementById('mcLoginForm');
+    var formRegister = document.getElementById('mcRegisterForm');
+    tabLogin.addEventListener('click', function() {
+      tabLogin.classList.add('active');
+      tabRegister.classList.remove('active');
+      formLogin.classList.remove('hidden');
+      formRegister.classList.add('hidden');
+    });
+    tabRegister.addEventListener('click', function() {
+      tabRegister.classList.add('active');
+      tabLogin.classList.remove('active');
+      formRegister.classList.remove('hidden');
+      formLogin.classList.add('hidden');
+    });
+
+    // 登录
+    document.getElementById('mcLoginBtn').addEventListener('click', async function() {
+      var errEl = document.getElementById('mcLoginError');
+      errEl.textContent = '';
+      var email = document.getElementById('mcLoginEmail').value.trim();
+      var pw = document.getElementById('mcLoginPassword').value;
+      if (!email || !pw) { errEl.textContent = '请填写邮箱和密码'; return; }
+      if (!validEmail(email)) { errEl.textContent = '邮箱格式不正确'; return; }
+      if (pw.length < 6) { errEl.textContent = '密码至少 6 位'; return; }
+      if (typeof SB === 'undefined' || !SB.ready()) { errEl.textContent = '云服务不可用，请检查网络'; return; }
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '登录中…';
+      try {
+        var r = await SB.Auth.signIn(email, pw);
+        if (r.error || !r.user) { errEl.textContent = SB.errMsg(r.error || new Error('登录失败')); return; }
+        SB.setPassword(pw);   // 仅内存，用于派生 Key 加密密钥
+        var u = Store.state.user;
+        u.id = r.user.id;
+        u.isLogged = true;
+        u.email = r.user.email || email;
+        var meta = r.user.user_metadata || {};
+        u.nickname = meta.name || meta.nickname || email.split('@')[0];
+        u.username = u.nickname;
         Store.save();
-        Toast.show(t('loginSuccess'));
+        Toast.show('登录成功');
         renderProfile();
+        SB.Sync.firstSync();   // 后台同步，不阻塞
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '登录';
+      }
+    });
+
+    // 注册
+    document.getElementById('mcRegBtn').addEventListener('click', async function() {
+      var errEl = document.getElementById('mcRegError');
+      errEl.textContent = '';
+      var nickname = document.getElementById('mcRegNickname').value.trim();
+      var email = document.getElementById('mcRegEmail').value.trim();
+      var pw = document.getElementById('mcRegPassword').value;
+      var pw2 = document.getElementById('mcRegPassword2').value;
+      if (!nickname) { errEl.textContent = '请填写昵称'; return; }
+      if (!validEmail(email)) { errEl.textContent = '邮箱格式不正确'; return; }
+      if (pw.length < 6) { errEl.textContent = '密码至少 6 位'; return; }
+      if (pw !== pw2) { errEl.textContent = '两次输入的密码不一致'; return; }
+      if (typeof SB === 'undefined' || !SB.ready()) { errEl.textContent = '云服务不可用，请检查网络'; return; }
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '注册中…';
+      try {
+        var r = await SB.Auth.signUp(email, pw, nickname);
+        if (r.error) { errEl.textContent = SB.errMsg(r.error); return; }
+        Toast.show('验证邮件已发送，请查收后登录');
+        // 切回登录 Tab 并预填邮箱
+        tabLogin.click();
+        document.getElementById('mcLoginEmail').value = email;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '注册';
+      }
+    });
+
+    // 游客模式
+    document.getElementById('mcGuestLink').addEventListener('click', function() {
+      if (typeof App !== 'undefined' && App.closeSub) App.closeSub();
+      Toast.show('游客模式：数据仅保存在本设备');
+    });
+  }
+
+  /* ---------- 登录态：用户卡 + 会员卡 + 卡密激活 + 云同步 + 管理后台 + 退出 ---------- */
+  function renderMcLoggedIn(body) {
+    var user = Store.state.user;
+    var tier = tierOf(user.role);
+    var html = '';
+
+    // 用户卡
+    var name = user.nickname || user.username || user.email || '用户';
+    html += '<div class="profile-card">';
+    html += '<div class="profile-avatar">' + esc(name.charAt(0).toUpperCase()) + '</div>';
+    html += '<div class="profile-name">' + esc(name) + '</div>';
+    html += '<div class="profile-meta">' + esc(user.email) + '</div>';
+    html += '<span class="badge" style="background:' + tier.color + '">' + tier.icon + ' ' + tier.name + '</span>';
+    html += '</div>';
+
+    // 会员卡
+    html += '<div class="member-card" style="background:' + tier.grad + '">';
+    html += '<div class="member-card-head"><span class="member-card-tier">' + tier.icon + ' ' + tier.name + '</span><span class="member-card-label">OmniHub Member</span></div>';
+    html += '<div class="member-card-expire">到期时间：' + formatDate(user.planExpiresAt) + '</div>';
+    var quota = Number(user.storageQuotaMb) || 0;
+    var used = Number(user.storageUsedMb) || 0;
+    if (quota <= 0) {
+      html += '<div class="storage-text"><span>存储用量</span><span>--</span></div>';
+    } else {
+      var pct = Math.min(100, Math.round(used / quota * 100));
+      html += '<div class="storage-bar"><div class="storage-bar-fill" style="width:' + pct + '%"></div></div>';
+      html += '<div class="storage-text"><span>存储用量</span><span>' + used + ' / ' + quota + ' MB</span></div>';
+    }
+    html += '</div>';
+
+    // 卡密激活
+    html += '<div class="settings-group" style="padding:16px;">';
+    html += '<div class="settings-group-title" style="padding:0 0 8px;">卡密激活</div>';
+    html += '<div class="cardkey-row">';
+    html += '<input type="text" id="mcCardKey" class="input-field" placeholder="TP-XXXX-XXXX-XXXX" autocapitalize="characters">';
+    html += '<button id="mcRedeemBtn" class="btn-primary">激活</button>';
+    html += '</div>';
+    html += '<div class="auth-error" id="mcCardError"></div>';
+    html += '</div>';
+
+    // 云同步
+    html += '<div class="settings-group">';
+    html += '<div class="settings-group-title">云同步</div>';
+    html += '<div class="settings-row">';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">☁️</div><span class="settings-row-text">自动同步设置</span></div>';
+    html += '<div class="settings-row-right"><div class="toggle-switch ' + (user.cloudSync ? 'on' : '') + '" id="mcCloudSyncToggle"></div></div>';
+    html += '</div>';
+    html += '<div class="settings-row" id="mcSyncNowRow">';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">🔄</div><div><div class="settings-row-text">立即同步</div><div class="settings-row-desc" id="mcLastSync">上次同步：' + formatDateTime(user.lastSyncAt) + '</div></div></div>';
+    html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>';
+    html += '</div>';
+    html += '</div>';
+
+    // 管理后台入口（仅管理员）
+    if (user.role === 'admin' || user.isAdmin === true) {
+      html += '<div class="settings-group">';
+      html += '<div class="settings-row" id="mcAdminRow">';
+      html += '<div class="settings-row-left"><div class="settings-row-icon">🛠</div><div><div class="settings-row-text">管理后台</div><div class="settings-row-desc">会员/代理/数据统计</div></div></div>';
+      html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>';
+      html += '</div>';
+      html += '</div>';
+    }
+
+    // 退出登录
+    html += '<div class="settings-group">';
+    html += '<div class="settings-row" id="mcLogoutRow">';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">🚪</div><span class="settings-row-text" style="color:var(--danger)">退出登录</span></div>';
+    html += '</div>';
+    html += '</div>';
+
+    body.innerHTML = html;
+
+    // 卡密激活：verify → confirm → redeem
+    document.getElementById('mcRedeemBtn').addEventListener('click', async function() {
+      var errEl = document.getElementById('mcCardError');
+      errEl.textContent = '';
+      var key = document.getElementById('mcCardKey').value.trim();
+      if (!key) { errEl.textContent = '请输入卡密'; return; }
+      if (typeof SB === 'undefined' || !SB.ready()) { errEl.textContent = '云服务不可用，请检查网络'; return; }
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '验证中…';
+      try {
+        var v = await SB.verifyCard(key);
+        if (!confirm(describeCard(v, key))) return;
+        btn.textContent = '兑换中…';
+        await SB.redeemCard(key);
+        await SB.getMembership();   // 刷新会员信息
+        renderProfile();
+        Toast.show('已升级为 ' + tierOf(Store.state.user.role).name);
+      } catch (e) {
+        errEl.textContent = SB.errMsg(e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '激活';
+      }
+    });
+
+    // 立即同步
+    document.getElementById('mcSyncNowRow').addEventListener('click', async function() {
+      if (typeof SB === 'undefined' || !SB.ready()) return Toast.show('云服务不可用，请检查网络', 'error');
+      var desc = document.getElementById('mcLastSync');
+      if (desc) desc.textContent = '同步中…';
+      try {
+        var r = await SB.Sync.syncNow();
+        if (r && r.ok === false && !r.skipped) Toast.show('同步失败：' + SB.errMsg(r.error), 'error');
+        else Toast.show('同步完成');
+      } catch (e) {
+        Toast.show('同步失败：' + SB.errMsg(e), 'error');
+      }
+      renderProfile();
+    });
+
+    // 管理后台
+    var adminRow = document.getElementById('mcAdminRow');
+    if (adminRow) {
+      adminRow.addEventListener('click', function() {
+        window.open('https://smalluniverseheng.github.io/AI-admin/');
       });
     }
 
-    var registerBtn = document.getElementById('registerBtn');
-    if (registerBtn) {
-      registerBtn.addEventListener('click', function() {
-        Toast.show(t('developing'));
-      });
-    }
+    // 退出登录
+    document.getElementById('mcLogoutRow').addEventListener('click', function() {
+      if (!confirm('确定退出登录？本地数据将保留')) return;
+      if (typeof SB !== 'undefined') SB.Auth.signOut();
+      // 清空会话字段，保留本地数据
+      var u = Store.state.user;
+      u.isLogged = false;
+      u.id = '';
+      u.username = '';
+      u.email = '';
+      u.token = '';
+      u.nickname = '';
+      u.role = 'guest';
+      u.plan = '';
+      u.planExpiresAt = 0;
+      u.balance = 0;
+      u.storageUsedMb = 0;
+      u.storageQuotaMb = 0;
+      u.isAdmin = false;
+      u.memberLevel = 0;
+      u.memberExpire = 0;
+      u.cloudSync = false;
+      u.lastSyncAt = 0;
+      Store.save();
+      Toast.show('已退出登录');
+      renderProfile();
+    });
+  }
 
-    var logoutRow = document.getElementById('logoutRow');
-    if (logoutRow) {
-      logoutRow.addEventListener('click', function() {
-        if (confirm(t('confirmLogout'))) {
-          Store.state.user = { isLogged: false, username: '', email: '', token: '', memberLevel: 0, memberExpire: 0, cloudSync: false };
-          Store.save();
-          Toast.show(t('logoutSuccess'));
-          renderProfile();
-        }
-      });
-    }
+  /* 卡面信息确认文案（字段宽容：Worker 返回结构以实际为准） */
+  function describeCard(v, key) {
+    var c = (v && (v.card || v.data || v.card_key_info)) || v || {};
+    var msg = '卡密信息确认\n\n';
+    msg += '卡密：' + (c.card_key || c.key || key) + '\n';
+    var lv = c.level || c.plan || c.role || c.tier || c.target_role;
+    if (lv) msg += '等级：' + (tierOf(lv).name) + '\n';
+    var days = c.days || c.duration_days || c.valid_days;
+    if (days) msg += '时长：' + days + ' 天\n';
+    var amount = c.amount || c.balance || c.value || c.face_value;
+    if (amount) msg += '面额：' + amount + '\n';
+    if (c.remark || c.note) msg += '备注：' + (c.remark || c.note) + '\n';
+    msg += '\n确认激活该卡密？';
+    return msg;
   }
 
   function renderModuleManage() {
