@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
-  <link rel="stylesheet" href="css/style.css?v=7.2">
+  <link rel="stylesheet" href="css/style.css?v=7.3">
   <style>
     /* 开屏关键样式（内联兜底，style.css 加载失败也能显示） */
     #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0D0E13;transition:opacity .6s cubic-bezier(.22,.8,.32,1),visibility .6s;}
@@ -225,7 +225,7 @@
     </div>
     <div class="subpage-body">
       <div class="source-import-box">
-        <textarea id="sourceImportInput" placeholder="粘贴书源配置（JSON/CSS选择器）或 Venera JS 图源脚本..."></textarea>
+        <textarea id="sourceImportInput" placeholder="粘贴书源：支持 Legado JSON（单个或合集）、Venera JS 图源脚本、CSS 选择器配置，自动识别格式"></textarea>
         <button id="sourceImportBtn">导入书源</button>
       </div>
       <div id="sourceList"></div>
@@ -312,16 +312,18 @@
   <!-- Toast -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="js/store.js?v=7.2"></script>
-  <script src="js/ai-providers.js?v=7.2"></script>
-  <script src="js/ai-api.js?v=7.2"></script>
-  <script src="js/venera-engine.js?v=7.2"></script>
-  <script src="js/modules/nav.js?v=7.2"></script>
-  <script src="js/modules/reader.js?v=7.2"></script>
-  <script src="js/modules/novel-reader.js?v=7.2"></script>
-  <script src="js/modules/profile.js?v=7.2"></script>
-  <script src="js/modules/chat.js?v=7.2"></script>
-  <script src="js/modules/read.js?v=7.2"></script>
-  <script src="js/app.js?v=7.2"></script>
+  <script src="js/store.js?v=7.3"></script>
+  <script src="js/legado-engine.js?v=7.3"></script>
+  <script src="js/source-detect.js?v=7.3"></script>
+  <script src="js/ai-providers.js?v=7.3"></script>
+  <script src="js/ai-api.js?v=7.3"></script>
+  <script src="js/venera-engine.js?v=7.3"></script>
+  <script src="js/modules/nav.js?v=7.3"></script>
+  <script src="js/modules/reader.js?v=7.3"></script>
+  <script src="js/modules/novel-reader.js?v=7.3"></script>
+  <script src="js/modules/profile.js?v=7.3"></script>
+  <script src="js/modules/chat.js?v=7.3"></script>
+  <script src="js/modules/read.js?v=7.3"></script>
+  <script src="js/app.js?v=7.3"></script>
 </body>
 </html>
