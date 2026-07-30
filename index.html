@@ -112,6 +112,63 @@
       <span id="readerErrorText">加载失败</span>
       <button id="readerRetryBtn">重试</button>
     </div>
+
+  <!-- 小说阅读器 (全屏覆盖) -->
+  <div id="novelReaderOverlay" class="reader-overlay hidden">
+    <div id="novelReaderTopbar" class="reader-topbar">
+      <button id="novelReaderBack">←</button>
+      <span id="novelReaderTitle">小说</span>
+      <button id="novelReaderMenu">⋮</button>
+    </div>
+    <div id="novelReaderContent" class="novel-content"></div>
+    <div id="novelReaderBottombar" class="reader-bottombar">
+      <div class="reader-bottom-inner">
+        <button id="novelReaderPrevCh">上一章</button>
+        <span id="novelReaderPageIndicator">第1章</span>
+        <button id="novelReaderNextCh">下一章</button>
+      </div>
+    </div>
+    <div id="novelReaderFloat">
+      <button class="reader-float-btn" id="novelReaderChBtn" title="目录">☰</button>
+      <button class="reader-float-btn" id="novelReaderSetBtn" title="设置">⚙</button>
+    </div>
+    <div id="novelReaderChapterPanel" class="reader-panel">
+      <div class="reader-panel-head">
+        <span>目录</span>
+        <button class="reader-panel-close" id="novelReaderChClose">✕</button>
+      </div>
+      <div id="novelReaderChapterList"></div>
+    </div>
+    <div id="novelReaderSettingsPanel" class="reader-panel">
+      <div class="reader-panel-head">
+        <span>阅读设置</span>
+        <button class="reader-panel-close" id="novelReaderSetClose">✕</button>
+      </div>
+      <div class="reader-settings-body">
+        <div class="reader-settings-section">
+          <div class="reader-settings-label">字体大小</div>
+          <input type="range" id="novelFontSizeSlider" min="12" max="32" value="16" style="width:100%;">
+        </div>
+        <div class="reader-settings-section">
+          <div class="reader-settings-label">行间距</div>
+          <input type="range" id="novelLineHeightSlider" min="1" max="3" step="0.1" value="1.6" style="width:100%;">
+        </div>
+        <div class="reader-settings-section">
+          <div class="reader-settings-label">背景</div>
+          <div class="reader-mode-grid">
+            <button class="reader-mode-option active" data-bg="dark">夜间</button>
+            <button class="reader-mode-option" data-bg="parchment">羊皮纸</button>
+            <button class="reader-mode-option" data-bg="green">护眼</button>
+            <button class="reader-mode-option" data-bg="white">纯白</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="novelReaderLoading" class="hidden">
+      <div class="reader-spinner"></div>
+      <span>加载中…</span>
+    </div>
+  </div>
   </div>
 
   <!-- 子页面：搜索 -->
