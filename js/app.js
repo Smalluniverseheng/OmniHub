@@ -17,6 +17,7 @@ const App = (() => {
     // 初始化模块
     ProfileModule.init();
     ReadModule.init();
+    if (typeof ChatModule !== "undefined") ChatModule.init();
     Nav.init();
 
     // 跳转到主页
