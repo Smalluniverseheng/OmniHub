@@ -20,9 +20,9 @@ const ProfileModule = (() => {
     body.innerHTML = `
       <!-- 用户信息卡片 -->
       <div class="profile-card">
-        <div class="profile-avatar">${user.isLogged ? user.username[0].toUpperCase() : '👤'}</div>
-        <div class="profile-name">${user.isLogged ? user.username : '未登录'}</div>
-        <div class="profile-meta">${user.isLogged ? user.email : '登录后同步数据'}</div>
+        <div class="profile-avatar">${user.isLogged && user.username ? user.username[0].toUpperCase() : '👤'}</div>
+        <div class="profile-name">${user.isLogged && user.username ? user.username : '未登录'}</div>
+        <div class="profile-meta">${user.isLogged && user.email ? user.email : '登录后同步数据'}</div>
         ${user.isLogged ? `<span class="profile-vip">${['免费', '会员', '高级会员'][user.memberLevel]}</span>` : ''}
       </div>
 
@@ -164,8 +164,8 @@ const ProfileModule = (() => {
 
     body.innerHTML = `
       <div class="profile-card" style="text-align:center;">
-        <div class="profile-avatar" style="margin:0 auto 12px;">${user.isLogged ? user.username[0].toUpperCase() : '👤'}</div>
-        <div class="profile-name">${user.isLogged ? user.username : '未登录'}</div>
+        <div class="profile-avatar" style="margin:0 auto 12px;">${user.isLogged && user.username ? user.username[0].toUpperCase() : '👤'}</div>
+        <div class="profile-name">${user.isLogged && user.username ? user.username : '未登录'}</div>
         <div class="profile-meta">${user.isLogged ? user.email : '登录后享受云同步服务'}</div>
         ${user.isLogged ? `<span class="profile-vip">${['免费用户', '普通会员', '高级会员'][user.memberLevel]}</span>` : ''}
       </div>
