@@ -12,7 +12,12 @@ const ASSETS = [
   '/js/modules/read.js',
   '/js/modules/reader.js',
   '/js/venera-engine.js',
-  '/js/providers.js'
+  '/js/providers.js',
+  '/assets/brand.jpg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', e => {
