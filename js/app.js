@@ -78,14 +78,105 @@ const App = (() => {
     // 事件委托 - 所有点击走这里
     document.addEventListener('click', function(e) {
       // 子页面返回按钮
-      const closeBtn = e.target.closest('[data-close-sub]');
+      var closeBtn = e.target.closest('[data-close-sub]');
       if (closeBtn) { closeSub(); return; }
 
       // 设置行点击 - 打开子页面
-      const settingsRow = e.target.closest('[data-sub]');
+      var settingsRow = e.target.closest('[data-sub]');
       if (settingsRow && !e.target.closest('.toggle-switch')) {
-        const subId = settingsRow.dataset.sub;
+        var subId = settingsRow.dataset.sub;
         if (subId) openSub(subId);
+        return;
+      }
+
+      // 阅读模块 Tab 切换
+      var readTab = e.target.closest('.read-tab');
+      if (readTab && readTab.closest('#readBody')) {
+        e.stopPropagation();
+        var tab = readTab.dataset.tab;
+        document.querySelectorAll('#readBody .read-tab').forEach(function(t) {
+          t.classList.toggle('active', t.dataset.tab === tab);
+        });
+        // 触发 ReadModule 的 tab 切换
+        if (window.ReadModule && ReadModule.setTab) ReadModule.setTab(tab);
+        return;
+      }
+
+      // 书架点击
+      var shelfItem = e.target.closest('.shelf-item');
+      if (shelfItem) {
+        e.stopPropagation();
+        var url = shelfItem.dataset.url;
+        var book = Store.state.read.shelf.find(function(b) { return b.url === url; });
+        if (book && window.ReadModule) ReadModule.openBook(book);
+        return;
+      }
+
+      // 搜索按钮
+      var searchBtn = e.target.closest('#readSearchBtn');
+      if (searchBtn) {
+        e.stopPropagation();
+        openSub('subReadSearch');
+        return;
+      }
+
+      // 阅读设置按钮
+      var settingsBtn = e.target.closest('#readSettingsBtn');
+      if (settingsBtn) {
+        e.stopPropagation();
+        openSub('subReadSettings');
+        return;
+      }
+
+      // 搜索提交
+      var searchSubmit = e.target.closest('#readSearchSubmit');
+      if (searchSubmit) {
+        e.stopPropagation();
+        if (window.ReadModule && ReadModule.doSearch) ReadModule.doSearch();
+        return;
+      }
+
+      // 搜索结果 - 加入书架
+      var addShelfBtn = e.target.closest('.add-shelf-btn');
+      if (addShelfBtn) {
+        e.stopPropagation();
+        var row = addShelfBtn.closest('.result-item');
+        if (row && window.ReadModule) {
+          ReadModule.addToShelf({
+            id: row.dataset.url,
+            title: row.dataset.name,
+            url: row.dataset.url,
+            cover: row.dataset.cover || '',
+            type: row.dataset.media || 'novel',
+            source: row.dataset.source || ''
+          });
+        }
+        return;
+      }
+
+      // 搜索结果 - 立即阅读
+      var readNowBtn = e.target.closest('.read-now-btn');
+      if (readNowBtn) {
+        e.stopPropagation();
+        var row = readNowBtn.closest('.result-item');
+        if (row && window.ReadModule) {
+          ReadModule.openBook({
+            id: row.dataset.url,
+            title: row.dataset.name,
+            url: row.dataset.url,
+            cover: row.dataset.cover || '',
+            type: row.dataset.media || 'novel',
+            source: row.dataset.source || ''
+          });
+        }
+        return;
+      }
+
+      // 搜索结果行点击
+      var resultItem = e.target.closest('.result-item');
+      if (resultItem && !e.target.closest('.result-btn')) {
+        e.stopPropagation();
+        // 显示详情或加入书架
         return;
       }
     });
