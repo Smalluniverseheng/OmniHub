@@ -206,17 +206,36 @@ const App = (() => {
     Nav.updateActive(pageId);
   }
 
+  // 子页面导航堆栈：打开新子页面时隐藏当前子页面，返回时逐级回退
+  var subStack = [];
+
   function openSub(subId) {
     const sub = document.getElementById(subId);
-    if (sub) {
-      sub.classList.add('open');
-      document.body.style.overflow = 'hidden';
+    if (!sub) return;
+    if (sub.classList.contains('open')) return;
+    const current = document.querySelector('.subpage.open');
+    if (current && current !== sub) {
+      current.classList.remove('open');
+      subStack.push(current.id);
     }
+    sub.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    // 打开时触发目标子页面的渲染钩子（若模块定义了的话）
+    var hook = 'render:' + subId;
+    try { document.dispatchEvent(new CustomEvent(hook)); } catch (e) {}
   }
 
   function closeSub() {
-    document.querySelectorAll('.subpage.open').forEach(s => s.classList.remove('open'));
-    document.body.style.overflow = '';
+    const current = document.querySelector('.subpage.open');
+    if (current) current.classList.remove('open');
+    const prevId = subStack.pop();
+    const prev = prevId && document.getElementById(prevId);
+    if (prev) {
+      prev.classList.add('open');
+    } else {
+      subStack.length = 0;
+      document.body.style.overflow = '';
+    }
   }
 
   function bindGlobalEvents() {

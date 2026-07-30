@@ -1,4 +1,4 @@
-const VERSION = 'v8.0';
+const VERSION = 'v8.1';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [
@@ -9,6 +9,7 @@ const ASSETS = [
   '/js/supabase.js',
   '/js/ai-providers.js',
   '/js/ai-models.js',
+  '/js/brand-icons.js',
   '/js/ai-api.js',
   '/js/voice.js',
   '/js/app.js',

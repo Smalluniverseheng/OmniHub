@@ -1179,7 +1179,8 @@ const ChatModule = (() => {
     var disabled = m.type !== 'chat' && m.type !== 'image' && m.type !== 'video';
     var active = !disabled && c.mode !== 'image' && (c.modelId === m.id || (!c.modelId && c.model === m.id && c.provider === meta.slug));
     var html = '<div class="chat-model-row' + (active ? ' active' : '') + (disabled ? ' disabled' : '') + '" data-mid="' + esc(m.id) + '">';
-    html += '<div class="chat-model-icon" style="background:' + meta.color + '">' + esc(meta.abbr) + '</div>';
+    var brandSvg = (typeof BrandIcons !== 'undefined') ? BrandIcons.svg(m.provider) : null;
+    html += '<div class="chat-model-icon' + (brandSvg ? ' has-brand' : '') + '" style="background:' + meta.color + '">' + (brandSvg || esc(meta.abbr)) + '</div>';
     html += '<div class="chat-model-info">';
     html += '<div class="chat-model-name">' + esc(m.name || m.id) + '</div>';
     var desc = modelDesc(m);

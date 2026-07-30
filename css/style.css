@@ -159,24 +159,29 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .fab-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.6); opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 999; }
 .fab-mask.show { opacity: 1; pointer-events: auto; }
 /* iPhone 辅助触控风格：深色圆角毛玻璃面板 */
-.fab-menu { position: fixed; right: 20px; bottom: 96px; z-index: 1001; display: none; flex-direction: column; align-items: center; gap: 10px; padding: 14px; border-radius: 22px; background: rgba(30,30,34,0.72); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 36px rgba(0,0,0,0.45); }
-.fab-menu.open { display: flex; }
-.fab-menu-pages { display: flex; gap: 10px; padding: 0; background: transparent; border-radius: 0; border: none; max-width: 280px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; box-shadow: none; }
-.fab-menu-pages::-webkit-scrollbar { display: none; }
-.fab-module-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 6px; min-width: 68px; cursor: pointer; scroll-snap-align: start; border-radius: 14px; transition: background 0.15s; position: relative; }
-.fab-module-item:hover { background: rgba(255,255,255,0.08); }
-.fab-module-item.active .fab-module-icon { box-shadow: 0 0 0 2px var(--accent); }
+/* 导航面板：屏幕正中深色圆角大面板，scale 弹入/收缩动画 */
+.fab-menu { position: fixed; left: 50%; top: 50%; z-index: 1001; display: flex; flex-direction: column; align-items: center; gap: 16px; width: 272px; max-width: 480px; padding: 26px 20px 18px; border-radius: 26px; background: rgba(30,30,34,0.85); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 16px 48px rgba(0,0,0,0.5); transform: translate(-50%, -50%) scale(0.8); opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; }
+.fab-menu.open { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; }
+/* 翻页视口：隐藏溢出，内部轨道 translateX 跟随吸附 */
+.fab-menu-viewport { width: 100%; overflow: hidden; }
+.fab-menu-pages { display: flex; width: 100%; }
+/* 每页 2×2 网格，桌面端媒体查询改为 4 列 */
+.fab-page { flex: 0 0 100%; display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px 12px; justify-items: center; padding: 2px; }
+.fab-module-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; position: relative; transition: transform 0.2s, opacity 0.2s; }
+.fab-module-item.active .fab-module-icon { box-shadow: 0 0 0 2px var(--accent); background: var(--accent-soft); }
 .fab-module-item.dragging { opacity: 0.5; transform: scale(1.1); z-index: 10; }
-.fab-module-item .delete-badge { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; background: var(--danger); color: #fff; border-radius: 50%; font-size: 12px; display: flex; align-items: center; justify-content: center; display: none; }
-.fab-module-item.editing .delete-badge { display: flex; }
+.fab-module-item.removing { transform: scale(0); opacity: 0; }
+/* 删除角标：编辑模式下 scale 弹入 */
+.fab-module-item .delete-badge { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; background: var(--danger); color: #fff; border-radius: 50%; font-size: 12px; display: flex; align-items: center; justify-content: center; transform: scale(0); transition: transform 0.18s cubic-bezier(.34,1.56,.64,1); z-index: 2; }
+.fab-module-item.editing .delete-badge { transform: scale(1); }
 .fab-module-item.editing { animation: shake 0.3s infinite; }
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)} }
-.fab-module-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(64,64,68,0.9); display: flex; align-items: center; justify-content: center; font-size: 24px; border: none; color: #fff; transition: all 0.15s; }
-.fab-module-name { font-size: 11px; color: rgba(255,255,255,0.75); white-space: nowrap; font-weight: 500; }
+/* 网格大圆形图标按钮 + 下方中文标签 */
+.fab-module-icon { width: 68px; height: 68px; border-radius: 50%; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; font-size: 30px; border: none; color: #fff; transition: all 0.15s; }
+.fab-module-name { font-size: 13px; color: var(--text-2); white-space: nowrap; font-weight: 500; }
 .fab-menu-dots { display: flex; gap: 6px; }
-.fab-menu-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: background 0.2s; }
+.fab-menu-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: background 0.2s; cursor: pointer; }
 .fab-menu-dot.active { background: #fff; }
-.fab-menu-close { width: 40px; height: 40px; border-radius: 50%; background: rgba(64,64,68,0.9); border: none; color: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; }
 
 /* === 我的模块 === */
 .profile-card { background: var(--bg-card); border-radius: var(--radius-lg); padding: 24px 20px; margin-bottom: 20px; border: 1px solid var(--border); text-align: center; }
@@ -324,17 +329,25 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 /* === 响应式 === */
 @media (max-width: 380px) {
   .shelf-grid { grid-template-columns: repeat(2, 1fr); }
-  .fab-menu-pages { max-width: 220px; }
+}
+/* 窄屏/手表：面板仍 2×2，但整体缩小 */
+@media (max-width: 359px) {
+  .fab-menu { width: 224px; padding: 20px 14px 14px; gap: 12px; }
+  .fab-module-icon { width: 56px; height: 56px; font-size: 26px; }
+  .fab-module-name { font-size: 12px; }
 }
 @media (min-width: 600px) {
   .shelf-grid { grid-template-columns: repeat(4, 1fr); }
-  .fab-menu-pages { max-width: 360px; }
+}
+/* 桌面端：面板居中加宽，网格每行 4 个 */
+@media (min-width: 768px) {
+  .fab-menu { width: 440px; }
+  .fab-page { grid-template-columns: repeat(4, 1fr); }
 }
 
 /* RTL support for Arabic */
 [dir="rtl"] .settings-row-left { flex-direction: row-reverse; }
 [dir="rtl"] .settings-row-right { flex-direction: row-reverse; }
-[dir="rtl"] .fab-menu { right: auto; left: 20px; }
 [dir="rtl"] .fab-trigger { right: auto; left: 20px; }
 
 
