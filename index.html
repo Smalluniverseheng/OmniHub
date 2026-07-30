@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
-  <link rel="stylesheet" href="css/style.css?v=7.1">
+  <link rel="stylesheet" href="css/style.css?v=7.2">
   <style>
     /* 开屏关键样式（内联兜底，style.css 加载失败也能显示） */
     #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0D0E13;transition:opacity .6s cubic-bezier(.22,.8,.32,1),visibility .6s;}
@@ -68,18 +68,9 @@
       <div class="page-body" id="readBody"></div>
     </div>
 
-    <!-- 对话模块 (占位) -->
+    <!-- 对话模块 -->
     <div class="page" id="page-chat">
-      <div class="page-header">
-        <h2 class="page-title">对话</h2>
-      </div>
-      <div class="page-body" id="chatBody">
-        <div class="empty-state">
-          <div class="empty-icon">💬</div>
-          <div class="empty-text">对话模块开发中</div>
-          <div class="empty-sub">请在「我的」→「模块管理」中管理模块</div>
-        </div>
-      </div>
+      <div class="page-body" id="chatBody"></div>
     </div>
   </div>
 
@@ -286,6 +277,33 @@
     <div class="subpage-body" id="dataManageBody"></div>
   </div>
 
+  <!-- 子页面：对话历史 -->
+  <div class="subpage" id="subChatHistory">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>对话历史</h3>
+    </div>
+    <div class="subpage-body" id="chatHistoryBody"></div>
+  </div>
+
+  <!-- 子页面：选择模型 -->
+  <div class="subpage" id="subChatModel">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>选择模型</h3>
+    </div>
+    <div class="subpage-body" id="chatModelBody"></div>
+  </div>
+
+  <!-- 子页面：对话设置 -->
+  <div class="subpage" id="subChatSettings">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>对话设置</h3>
+    </div>
+    <div class="subpage-body" id="chatSettingsBody"></div>
+  </div>
+
   <!-- 加载层 -->
   <div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loading-spinner"></div>
@@ -294,14 +312,16 @@
   <!-- Toast -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="js/store.js?v=7.1"></script>
-  <script src="js/venera-engine.js?v=7.1"></script>
-  <script src="js/modules/nav.js?v=7.1"></script>
-  <script src="js/modules/reader.js?v=7.1"></script>
-  <script src="js/modules/novel-reader.js?v=7.1"></script>
-  <script src="js/modules/profile.js?v=7.1"></script>
-  <script src="js/modules/chat.js?v=7.1"></script>
-  <script src="js/modules/read.js?v=7.1"></script>
-  <script src="js/app.js?v=7.1"></script>
+  <script src="js/store.js?v=7.2"></script>
+  <script src="js/ai-providers.js?v=7.2"></script>
+  <script src="js/ai-api.js?v=7.2"></script>
+  <script src="js/venera-engine.js?v=7.2"></script>
+  <script src="js/modules/nav.js?v=7.2"></script>
+  <script src="js/modules/reader.js?v=7.2"></script>
+  <script src="js/modules/novel-reader.js?v=7.2"></script>
+  <script src="js/modules/profile.js?v=7.2"></script>
+  <script src="js/modules/chat.js?v=7.2"></script>
+  <script src="js/modules/read.js?v=7.2"></script>
+  <script src="js/app.js?v=7.2"></script>
 </body>
 </html>
