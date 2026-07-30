@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>OmniHub</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css?v=7.0">
+</head>
+<body>
+  <!-- 页面容器 -->
+  <div id="app">
+    <!-- 我的模块 (默认主页) -->
+    <div class="page active" id="page-profile">
+      <div class="page-header">
+        <h2 class="page-title">我的</h2>
+      </div>
+      <div class="page-body" id="profileBody"></div>
+    </div>
+
+    <!-- 阅读模块 -->
+    <div class="page" id="page-read">
+      <div class="page-header">
+        <h2 class="page-title" id="readTitle">阅读</h2>
+        <div class="page-actions">
+          <button class="icon-btn" id="readSearchBtn"><span data-icon="search"></span></button>
+          <button class="icon-btn" id="readSettingsBtn"><span data-icon="settings"></span></button>
+        </div>
+      </div>
+      <div class="page-body" id="readBody"></div>
+    </div>
+
+    <!-- 对话模块 (占位) -->
+    <div class="page" id="page-chat">
+      <div class="page-header">
+        <h2 class="page-title">对话</h2>
+      </div>
+      <div class="page-body" id="chatBody">
+        <div class="empty-state">
+          <div class="empty-icon">💬</div>
+          <div class="empty-text">对话模块开发中</div>
+          <div class="empty-sub">请在「我的」→「模块管理」中管理模块</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 悬浮球导航 -->
+  <div id="fabNav" class="fab-nav">
+    <div class="fab-mask" id="fabMask"></div>
+    <div class="fab-menu" id="fabMenu">
+      <div class="fab-menu-pages" id="fabMenuPages"></div>
+      <div class="fab-menu-dots" id="fabMenuDots"></div>
+      <button class="fab-menu-close" id="fabMenuClose">✕</button>
+    </div>
+    <button class="fab-trigger" id="fabTrigger">
+      <span class="fab-icon" id="fabIcon">⌂</span>
+    </button>
+  </div>
+
+  <!-- 阅读器 (全屏覆盖) -->
+  <div id="readerOverlay" class="reader-overlay hidden">
+    <div id="readerTopbar" class="reader-topbar">
+      <button id="readerBack">←</button>
+      <span id="readerTitle">阅读</span>
+      <button id="readerMenu">⋮</button>
+    </div>
+    <div id="readerContent"></div>
+    <div id="readerBottombar" class="reader-bottombar">
+      <div class="reader-bottom-inner">
+        <button id="readerPrevCh">上一章</button>
+        <input type="range" id="readerPageSlider" min="1" max="100" value="1">
+        <span id="readerPageIndicator">1 / 1</span>
+        <button id="readerNextCh">下一章</button>
+      </div>
+    </div>
+    <div id="readerFloat">
+      <button class="reader-float-btn" id="readerChBtn" title="章节">☰</button>
+      <button class="reader-float-btn" id="readerSetBtn" title="设置">⚙</button>
+    </div>
+    <div id="readerChapterPanel" class="reader-panel">
+      <div class="reader-panel-head">
+        <span>章节列表</span>
+        <button class="reader-panel-close" id="readerChClose">✕</button>
+      </div>
+      <div id="readerChapterList"></div>
+    </div>
+    <div id="readerSettingsPanel" class="reader-panel">
+      <div class="reader-panel-head">
+        <span>阅读设置</span>
+        <button class="reader-panel-close" id="readerSetClose">✕</button>
+      </div>
+      <div class="reader-settings-body">
+        <div class="reader-settings-section">
+          <div class="reader-settings-label">阅读模式</div>
+          <div class="reader-mode-grid">
+            <button class="reader-mode-option active" data-mode="gallery-rtl">日漫翻页<br><small>右→左</small></button>
+            <button class="reader-mode-option" data-mode="gallery-ltr">国漫翻页<br><small>左→右</small></button>
+            <button class="reader-mode-option" data-mode="continuous-ttb">连续滚动<br><small>条漫</small></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="readerLoading" class="hidden">
+      <div class="reader-spinner"></div>
+      <span>加载中…</span>
+    </div>
+    <div id="readerError" class="hidden">
+      <span id="readerErrorText">加载失败</span>
+      <button id="readerRetryBtn">重试</button>
+    </div>
+  </div>
+
+  <!-- 子页面：搜索 -->
+  <div class="subpage" id="subReadSearch">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>搜索</h3>
+    </div>
+    <div class="subpage-body">
+      <div class="search-bar">
+        <input type="text" id="readSearchInput" placeholder="搜索小说或漫画...">
+        <button id="readSearchSubmit">搜索</button>
+      </div>
+      <div class="source-tabs" id="readSearchTabs">
+        <button class="source-tab active" data-type="all">全部</button>
+        <button class="source-tab" data-type="novel">小说</button>
+        <button class="source-tab" data-type="comic">漫画</button>
+      </div>
+      <div id="readSearchResults"></div>
+    </div>
+  </div>
+
+  <!-- 子页面：书源管理 -->
+  <div class="subpage" id="subReadSources">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>书源管理</h3>
+    </div>
+    <div class="subpage-body">
+      <div class="source-import-box">
+        <textarea id="sourceImportInput" placeholder="粘贴书源配置（JSON/CSS选择器）或 Venera JS 图源脚本..."></textarea>
+        <button id="sourceImportBtn">导入书源</button>
+      </div>
+      <div id="sourceList"></div>
+    </div>
+  </div>
+
+  <!-- 子页面：阅读设置 -->
+  <div class="subpage" id="subReadSettings">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>阅读设置</h3>
+    </div>
+    <div class="subpage-body" id="readSettingsBody"></div>
+  </div>
+
+  <!-- 子页面：模块管理 -->
+  <div class="subpage" id="subModuleManage">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>模块管理</h3>
+    </div>
+    <div class="subpage-body" id="moduleManageBody"></div>
+  </div>
+
+  <!-- 子页面：会员中心 -->
+  <div class="subpage" id="subMemberCenter">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>会员中心</h3>
+    </div>
+    <div class="subpage-body" id="memberCenterBody"></div>
+  </div>
+
+  <!-- 子页面：全局设置 -->
+  <div class="subpage" id="subGlobalSettings">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>设置</h3>
+    </div>
+    <div class="subpage-body" id="globalSettingsBody"></div>
+  </div>
+
+  <!-- 子页面：数据管理 -->
+  <div class="subpage" id="subDataManage">
+    <div class="subpage-header">
+      <button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>
+      <h3>数据管理</h3>
+    </div>
+    <div class="subpage-body" id="dataManageBody"></div>
+  </div>
+
+  <!-- 加载层 -->
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="js/store.js?v=7.0"></script>
+  <script src="js/venera-engine.js?v=7.0"></script>
+  <script src="js/modules/profile.js?v=7.0"></script>
+  <script src="js/modules/read.js?v=7.0"></script>
+  <script src="js/app.js?v=7.0"></script>
+</body>
+</html>
