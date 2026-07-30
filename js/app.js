@@ -31,6 +31,13 @@ const App = (() => {
       switchPage('profile');
     }
 
+    // 云服务：SDK 就绪且会话有效则恢复登录态 + 后台 firstSync（不阻塞首屏）
+    if (typeof SB !== 'undefined' && SB.ready()) {
+      SB.restoreSession().then(function(restored) {
+        if (restored && typeof ProfileModule !== 'undefined') ProfileModule.renderProfile();
+      }).catch(function(e) { console.warn('SB restore failed:', e); });
+    }
+
     dismissSplash();
     checkVersionAnnouncement();
   }
