@@ -54,6 +54,12 @@ const Reader = (() => {
       let images = [];
       if (state.sourceType === 'venera' && typeof VeneraEngine !== 'undefined') {
         images = await VeneraEngine.getImages(state.source, state.bookUrl, ch.url || ch.id);
+      } else if (state.sourceType === 'legado' && typeof LegadoEngine !== 'undefined') {
+        const lsrc = (Store.state.read.sources || []).find(function(s) { return s.name === state.source || s.key === state.source || s.id === state.source; });
+        if (!lsrc || !lsrc.raw) throw new Error('Legado 书源不存在');
+        const res = await LegadoEngine.getContent(lsrc.raw, { name: ch.name, url: ch.url });
+        if (res.type !== 'images') throw new Error('该章节为文本内容，请使用小说阅读器');
+        images = res.images;
       } else {
         images = await fetchImagesCss(ch.url);
       }
