@@ -1,4 +1,4 @@
-const VERSION = 'v7.1';
+const VERSION = 'v7.2';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [
@@ -6,6 +6,8 @@ const ASSETS = [
   '/index.html',
   '/css/style.css',
   '/js/store.js',
+  '/js/ai-providers.js',
+  '/js/ai-api.js',
   '/js/app.js',
   '/js/modules/nav.js',
   '/js/modules/profile.js',
