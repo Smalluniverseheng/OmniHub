@@ -13,6 +13,13 @@ const AIAPI = (() => {
     return res;
   }
 
+  // dataURL → { mime, data }（base64 拆分，供 anthropic / google 使用）
+  function splitDataUrl(dataUrl) {
+    var m = /^data:([^;]+);base64,(.+)$/.exec(String(dataUrl || ''));
+    if (!m) return { mime: 'image/jpeg', data: '' };
+    return { mime: m[1], data: m[2] };
+  }
+
   function buildBody(p, opts, stream) {
     var format = p.format || 'openai';
     var messages = opts.messages || [];
@@ -23,8 +30,19 @@ const AIAPI = (() => {
       var msgs = [];
       for (i = 0; i < messages.length; i++) {
         var m = messages[i];
-        if (m.role === 'system') sysParts.push(m.content);
-        else msgs.push({ role: m.role, content: m.content });
+        if (m.role === 'system') { sysParts.push(m.content); continue; }
+        if (m.images && m.images.length) {
+          // 图片消息：content 数组 = image(base64) + text
+          var cparts = [];
+          for (var ai = 0; ai < m.images.length; ai++) {
+            var sp = splitDataUrl(m.images[ai]);
+            cparts.push({ type: 'image', source: { type: 'base64', media_type: sp.mime, data: sp.data } });
+          }
+          cparts.push({ type: 'text', text: m.content || '' });
+          msgs.push({ role: m.role, content: cparts });
+        } else {
+          msgs.push({ role: m.role, content: m.content });
+        }
       }
       var abody = {
         model: opts.model,
@@ -42,9 +60,17 @@ const AIAPI = (() => {
       for (i = 0; i < messages.length; i++) {
         var gm = messages[i];
         if (gm.role === 'system') { gSys.push(gm.content); continue; }
+        var gparts = [];
+        if (gm.images && gm.images.length) {
+          for (var gi = 0; gi < gm.images.length; gi++) {
+            var gsp = splitDataUrl(gm.images[gi]);
+            gparts.push({ inline_data: { mime_type: gsp.mime, data: gsp.data } });
+          }
+        }
+        gparts.push({ text: gm.content || '' });
         contents.push({
           role: gm.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: gm.content }]
+          parts: gparts
         });
       }
       var gbody = { contents: contents };
@@ -52,15 +78,30 @@ const AIAPI = (() => {
       return gbody;
     }
 
-    // openai 兼容
+    // openai 兼容：含图片的消息 content 转数组
+    var omsgs = [];
+    for (i = 0; i < messages.length; i++) {
+      var om = messages[i];
+      if (om.images && om.images.length && om.role !== 'system') {
+        var oparts = [{ type: 'text', text: om.content || '' }];
+        for (var oi = 0; oi < om.images.length; oi++) {
+          oparts.push({ type: 'image_url', image_url: { url: om.images[oi] } });
+        }
+        omsgs.push({ role: om.role, content: oparts });
+      } else {
+        omsgs.push({ role: om.role, content: om.content });
+      }
+    }
     var obody = {
       model: opts.model,
-      messages: messages,
+      messages: omsgs,
       temperature: opts.temperature,
       max_tokens: opts.maxTokens,
       stream: !!stream
     };
     if (stream) obody.stream_options = { include_usage: true };
+    // 深度思考开关：deepseek 系请求加 enable_thinking
+    if (opts.thinking && p.keySlug === 'deepseek') obody.enable_thinking = true;
     return obody;
   }
 
@@ -72,14 +113,16 @@ const AIAPI = (() => {
     return AIProviders.chatCompletionsUrl(p);
   }
 
-  // 从 SSE data 载荷提取增量文本与 usage
+  // 从 SSE data 载荷提取增量文本、思考内容与 usage
   function extractDelta(format, json) {
     var text = '';
+    var thinking = '';
     var usage = null;
     try {
       if (format === 'anthropic') {
-        if (json.type === 'content_block_delta' && json.delta && json.delta.text) {
-          text = json.delta.text;
+        if (json.type === 'content_block_delta' && json.delta) {
+          if (json.delta.text) text = json.delta.text;
+          else if (json.delta.type === 'thinking_delta' && json.delta.thinking) thinking = json.delta.thinking;
         }
         if (json.type === 'message_delta' && json.usage) usage = json.usage;
         if (json.type === 'message_start' && json.message && json.message.usage) usage = json.message.usage;
@@ -88,19 +131,24 @@ const AIAPI = (() => {
         if (cands && cands[0] && cands[0].content && cands[0].content.parts) {
           var parts = cands[0].content.parts;
           for (var i = 0; i < parts.length; i++) {
-            if (parts[i].text) text += parts[i].text;
+            if (parts[i].text) {
+              if (parts[i].thought) thinking += parts[i].text;
+              else text += parts[i].text;
+            }
           }
         }
         if (json.usageMetadata) usage = json.usageMetadata;
       } else {
         var choices = json.choices;
-        if (choices && choices[0] && choices[0].delta && choices[0].delta.content) {
-          text = choices[0].delta.content;
+        if (choices && choices[0] && choices[0].delta) {
+          var delta = choices[0].delta;
+          if (delta.content) text = delta.content;
+          if (delta.reasoning_content) thinking = delta.reasoning_content;
         }
         if (json.usage) usage = json.usage;
       }
     } catch (e) { /* ignore parse issues */ }
-    return { text: text, usage: usage };
+    return { text: text, thinking: thinking, usage: usage };
   }
 
   // 流式对话
@@ -123,6 +171,7 @@ const AIAPI = (() => {
     var decoder = new TextDecoder('utf-8');
     var buffer = '';
     var full = '';
+    var thinkingFull = '';
     var usage = null;
     var timedOut = false;
 
@@ -156,9 +205,10 @@ const AIAPI = (() => {
           try { json = JSON.parse(payload); } catch (e) { continue; }
           var d = extractDelta(format, json);
           if (d.usage) usage = d.usage;
-          if (d.text) {
-            full += d.text;
-            if (typeof opts.onChunk === 'function') opts.onChunk(full);
+          if (d.thinking) thinkingFull += d.thinking;
+          if (d.text) full += d.text;
+          if ((d.text || d.thinking) && typeof opts.onChunk === 'function') {
+            opts.onChunk(full, thinkingFull);
           }
         }
       }
@@ -167,7 +217,7 @@ const AIAPI = (() => {
     }
 
     if (timedOut) throw new Error('响应超时：30 秒未收到数据');
-    return { content: full, usage: usage };
+    return { content: full, thinking: thinkingFull, usage: usage };
   }
 
   // 非流式降级
@@ -187,11 +237,13 @@ const AIAPI = (() => {
     var json = await res.json();
 
     var content = '';
+    var thinking = '';
     var usage = null;
     if (format === 'anthropic') {
       if (json.content) {
         for (var i = 0; i < json.content.length; i++) {
           if (json.content[i].type === 'text') content += json.content[i].text;
+          else if (json.content[i].type === 'thinking') thinking += json.content[i].thinking || '';
         }
       }
       usage = json.usage || null;
@@ -200,17 +252,21 @@ const AIAPI = (() => {
       if (cands && cands[0] && cands[0].content && cands[0].content.parts) {
         var parts = cands[0].content.parts;
         for (var j = 0; j < parts.length; j++) {
-          if (parts[j].text) content += parts[j].text;
+          if (parts[j].text) {
+            if (parts[j].thought) thinking += parts[j].text;
+            else content += parts[j].text;
+          }
         }
       }
       usage = json.usageMetadata || null;
     } else {
       if (json.choices && json.choices[0] && json.choices[0].message) {
         content = json.choices[0].message.content || '';
+        thinking = json.choices[0].message.reasoning_content || '';
       }
       usage = json.usage || null;
     }
-    return { content: content, usage: usage };
+    return { content: content, thinking: thinking, usage: usage };
   }
 
   // 图片生成
@@ -244,8 +300,9 @@ const AIAPI = (() => {
 
   // Key 有效性检测：拉取该厂商 models 列表验证
   // provider 可为 keySlug 或 provider 对象；customBase 可选（覆盖官方地址）
+  // timeoutMs 可选（默认 12000，自动匹配并行探测用 5000）
   // 返回 { ok, models?: [...], error? }
-  async function validateKey(provider, apiKey, customBase) {
+  async function validateKey(provider, apiKey, customBase, timeoutMs) {
     var p = typeof provider === 'string' ? AIProviders.get(provider) : provider;
     if (!p) return { ok: false, error: '未知厂商' };
     var key = String(apiKey || '').trim();
@@ -269,7 +326,7 @@ const AIAPI = (() => {
     }
 
     var ctrl = new AbortController();
-    var timer = setTimeout(function() { ctrl.abort(); }, 12000);
+    var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs || 12000);
     try {
       var res = await fetch(url, { method: 'GET', headers: headers, signal: ctrl.signal });
       clearTimeout(timer);
