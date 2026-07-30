@@ -1,3 +1,81 @@
+/* ==================== 开屏页 Splash ==================== */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0D0E13;
+  transition: opacity 0.6s cubic-bezier(.22, .8, .32, 1), visibility 0.6s;
+}
+#splash.done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  animation: splashIn 0.7s cubic-bezier(.22, .8, .32, 1) both;
+}
+
+@keyframes splashIn {
+  from { opacity: 0; transform: scale(0.92) translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.splash-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(99, 102, 241, .35);
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+}
+.splash-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.splash-slogan {
+  font-size: 15px;
+  font-weight: 600;
+  color: #A6ADC0;
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.splash-dot {
+  color: #6366F1;
+  font-weight: 800;
+  animation: splashPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes splashPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .35; transform: scale(.85); }
+}
+
+.splash-brand {
+  font-size: 13px;
+  font-weight: 700;
+  color: #646C7E;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #splash { transition: none; }
+  .splash-inner { animation: none; }
+  .splash-dot { animation: none; }
+}
+
 /* ==================== OmniHub v7.0 - Global Styles ==================== */
 
 /* === 主题变量 === */
