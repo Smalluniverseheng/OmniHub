@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 
-  <link rel="stylesheet" href="css/style.css?v=7.4">
+  <link rel="stylesheet" href="css/style.css?v=7.6">
   <style>
     /* 开屏关键样式（内联兜底，style.css 加载失败也能显示） */
     #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0D0E13;transition:opacity .6s cubic-bezier(.22,.8,.32,1),visibility .6s;}
@@ -142,12 +142,19 @@
 
   <!-- 小说阅读器 (全屏覆盖) -->
   <div id="novelReaderOverlay" class="reader-overlay hidden">
+    <div id="novelReaderStage">
+      <div id="novelReaderContent" class="novel-content"></div>
+      <div id="novelTopProgress" class="novel-top-progress">
+        <span id="novelTopChapter"></span>
+        <span id="novelTopPage"></span>
+      </div>
+      <div class="novel-bottom-progress"><i id="novelProgressFill"></i></div>
+    </div>
     <div id="novelReaderTopbar" class="reader-topbar">
       <button id="novelReaderBack">←</button>
       <span id="novelReaderTitle">小说</span>
       <button id="novelReaderMenu">⋮</button>
     </div>
-    <div id="novelReaderContent" class="novel-content"></div>
     <div id="novelReaderBottombar" class="reader-bottombar">
       <div class="reader-bottom-inner">
         <button id="novelReaderPrevCh">上一章</button>
@@ -159,38 +166,92 @@
       <button class="reader-float-btn" id="novelReaderChBtn" title="目录">☰</button>
       <button class="reader-float-btn" id="novelReaderSetBtn" title="设置">⚙</button>
     </div>
-    <div id="novelReaderChapterPanel" class="reader-panel">
-      <div class="reader-panel-head">
-        <span>目录</span>
-        <button class="reader-panel-close" id="novelReaderChClose">✕</button>
+
+    <!-- 目录页：书籍详情 + 目录 -->
+    <div id="novelCatalogPage" class="novel-catalog">
+      <div class="novel-catalog-head">
+        <button class="novel-catalog-back" id="novelCatalogBack">←</button>
+        <span>书籍详情</span>
       </div>
-      <div id="novelReaderChapterList"></div>
+      <div class="novel-catalog-book">
+        <div class="novel-catalog-cover" id="novelCatalogCover">📕</div>
+        <div class="novel-catalog-info">
+          <div class="novel-catalog-title" id="novelCatalogTitle"></div>
+          <div class="novel-catalog-meta" id="novelCatalogMeta"></div>
+        </div>
+      </div>
+      <div class="novel-catalog-tabs">
+        <button class="novel-catalog-tab" id="novelTabDetail">详情</button>
+        <button class="novel-catalog-tab active" id="novelTabToc">目录</button>
+      </div>
+      <div class="novel-catalog-body">
+        <div id="novelDetailPane" class="novel-detail-pane hidden"></div>
+        <div id="novelTocPane" class="novel-toc-pane">
+          <div class="novel-toc-stats" id="novelTocStats"></div>
+          <div id="novelChapterList"></div>
+        </div>
+      </div>
+      <div class="novel-catalog-actions">
+        <button class="novel-action active" id="novelActToc"><i>☰</i>目录</button>
+        <button class="novel-action" id="novelActNight"><i>☾</i>夜间</button>
+        <button class="novel-action" id="novelActSet"><i>⚙</i>设置</button>
+        <button class="novel-action" id="novelActShelf"><i>⌂</i>书架</button>
+      </div>
     </div>
-    <div id="novelReaderSettingsPanel" class="reader-panel">
-      <div class="reader-panel-head">
-        <span>阅读设置</span>
-        <button class="reader-panel-close" id="novelReaderSetClose">✕</button>
-      </div>
-      <div class="reader-settings-body">
-        <div class="reader-settings-section">
-          <div class="reader-settings-label">字体大小</div>
-          <input type="range" id="novelFontSizeSlider" min="12" max="32" value="16" style="width:100%;">
+
+    <!-- 设置面板：底部弹出 -->
+    <div id="novelSheetMask" class="novel-sheet-mask"></div>
+    <div id="novelSettingsSheet" class="novel-sheet">
+      <div class="novel-sheet-main" id="novelSheetMain">
+        <div class="novel-sheet-section">
+          <div class="novel-sheet-label">亮度</div>
+          <div class="novel-sheet-row">
+            <span class="novel-sheet-sun">☀</span>
+            <input type="range" id="novelBrightness" min="10" max="100" value="100">
+          </div>
         </div>
-        <div class="reader-settings-section">
-          <div class="reader-settings-label">行间距</div>
-          <input type="range" id="novelLineHeightSlider" min="1" max="3" step="0.1" value="1.6" style="width:100%;">
+        <div class="novel-sheet-section">
+          <div class="novel-sheet-label">字号</div>
+          <div class="novel-sheet-row novel-fontsize-row">
+            <button id="novelFontMinus">A-</button>
+            <span id="novelFontValue">16</span>
+            <button id="novelFontPlus">A+</button>
+          </div>
         </div>
-        <div class="reader-settings-section">
-          <div class="reader-settings-label">背景</div>
-          <div class="reader-mode-grid">
-            <button class="reader-mode-option active" data-bg="dark">夜间</button>
-            <button class="reader-mode-option" data-bg="parchment">羊皮纸</button>
-            <button class="reader-mode-option" data-bg="green">护眼</button>
-            <button class="reader-mode-option" data-bg="white">纯白</button>
+        <div class="novel-sheet-section">
+          <button class="novel-sheet-navbtn" id="novelFontBtn"><span>字体</span><span id="novelFontName">系统默认 ›</span></button>
+        </div>
+        <div class="novel-sheet-section">
+          <div class="novel-sheet-label">颜色</div>
+          <div class="novel-color-row" id="novelColorRow"></div>
+        </div>
+        <div class="novel-sheet-section">
+          <div class="novel-sheet-label">背景</div>
+          <div class="novel-bg-row" id="novelBgRow"></div>
+        </div>
+        <div class="novel-sheet-section">
+          <div class="novel-sheet-label">翻页</div>
+          <div class="novel-flip-row" id="novelFlipRow"></div>
+        </div>
+        <div class="novel-sheet-section">
+          <button class="novel-sheet-navbtn" id="novelSpacingBtn"><span>间距设置</span><span>›</span></button>
+          <div class="novel-spacing-box hidden" id="novelSpacingBox">
+            <div class="novel-sheet-label">行距 <span id="novelLhValue">1.6</span></div>
+            <input type="range" id="novelLineHeight" min="1.2" max="2.4" step="0.1" value="1.6">
+            <div class="novel-sheet-label">段距 <span id="novelPsValue">8px</span></div>
+            <input type="range" id="novelParaSpacing" min="0" max="24" step="2" value="8">
           </div>
         </div>
       </div>
+      <div class="novel-sheet-sub" id="novelFontPanel">
+        <div class="novel-sheet-subhead">
+          <button id="novelFontBack">←</button>
+          <span>选择字体</span>
+        </div>
+        <div class="novel-font-grid" id="novelFontGrid"></div>
+      </div>
     </div>
+
     <div id="novelReaderLoading" class="hidden">
       <div class="reader-spinner"></div>
       <span>加载中…</span>
@@ -321,21 +382,21 @@
   <!-- Toast -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="js/providers.js?v=7.4"></script>
-  <script src="js/store.js?v=7.4"></script>
-  <script src="js/legado-engine.js?v=7.4"></script>
-  <script src="js/source-detect.js?v=7.4"></script>
-  <script src="js/ai-providers.js?v=7.4"></script>
-  <script src="js/ai-models.js?v=7.4"></script>
-  <script src="js/ai-api.js?v=7.4"></script>
-  <script src="js/changelog.js?v=7.4"></script>
-  <script src="js/venera-engine.js?v=7.4"></script>
-  <script src="js/modules/nav.js?v=7.4"></script>
-  <script src="js/modules/reader.js?v=7.4"></script>
-  <script src="js/modules/novel-reader.js?v=7.4"></script>
-  <script src="js/modules/profile.js?v=7.4"></script>
-  <script src="js/modules/chat.js?v=7.4"></script>
-  <script src="js/modules/read.js?v=7.4"></script>
-  <script src="js/app.js?v=7.4"></script>
+  <script src="js/providers.js?v=7.6"></script>
+  <script src="js/store.js?v=7.6"></script>
+  <script src="js/legado-engine.js?v=7.6"></script>
+  <script src="js/source-detect.js?v=7.6"></script>
+  <script src="js/ai-providers.js?v=7.6"></script>
+  <script src="js/ai-models.js?v=7.6"></script>
+  <script src="js/ai-api.js?v=7.6"></script>
+  <script src="js/changelog.js?v=7.6"></script>
+  <script src="js/venera-engine.js?v=7.6"></script>
+  <script src="js/modules/nav.js?v=7.6"></script>
+  <script src="js/modules/reader.js?v=7.6"></script>
+  <script src="js/modules/novel-reader.js?v=7.6"></script>
+  <script src="js/modules/profile.js?v=7.6"></script>
+  <script src="js/modules/chat.js?v=7.6"></script>
+  <script src="js/modules/read.js?v=7.6"></script>
+  <script src="js/app.js?v=7.6"></script>
 </body>
 </html>
