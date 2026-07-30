@@ -38,14 +38,17 @@ const Store = (() => {
       }
     },
 
-    // 对话模块 (占位)
+    // 对话模块
     chat: {
-      apiKey: '',
-      model: 'gpt-4o',
+      keys: {},           // { keySlug: apiKey }
+      customBase: '',     // 自定义接口地址
+      customModel: '',    // 自定义模型名
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      mode: 'chat',       // 'chat' | 'image'
       temperature: 0.7,
       maxTokens: 4096,
-      conversations: [],
-      plugins: []
+      conversations: []   // [{id,title,messages:[{id,role,content,image,ts}],createdAt,updatedAt}]
     },
 
     // 会员/账号
