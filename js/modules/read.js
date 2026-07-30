@@ -134,10 +134,12 @@ const ReadModule = (() => {
 
     var engine = engineOf(src);
     var chapters = [];
+    var bookInfo = null;
     try {
       if (engine === 'legado' && typeof LegadoEngine !== 'undefined') {
         var info = null;
         try { info = await LegadoEngine.getBookInfo(src.raw, book.url); } catch(e) { console.warn('Legado 详情获取失败:', e); }
+        bookInfo = info;
         chapters = await LegadoEngine.getToc(src.raw, { url: book.url }, info && info.tocUrl);
         // 分卷标题没有章节地址，阅读器不支持，过滤
         chapters = chapters.filter(function(c) { return c.url; });
@@ -165,7 +167,10 @@ const ReadModule = (() => {
           source: book.source,
           sourceType: engine,
           chapters: chapters,
-          currentChapter: chapterIdx
+          currentChapter: chapterIdx,
+          cover: book.cover || (shelfBook && shelfBook.cover) || (bookInfo && bookInfo.cover) || '',
+          author: book.author || (shelfBook && shelfBook.author) || (bookInfo && bookInfo.author) || '',
+          intro: (bookInfo && bookInfo.intro) || ''
         });
       } else {
         Toast.show('小说阅读器未加载', 'error');
