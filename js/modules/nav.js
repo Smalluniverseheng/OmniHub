@@ -207,5 +207,13 @@ const Nav = (() => {
     return item ? item.name : id;
   }
 
-  return { init, render, open, close, updateActive };
+  // 沉浸阅读联动：显示/隐藏悬浮球
+  function setVisible(visible) {
+    var nav = document.getElementById('fabNav');
+    if (!nav) return;
+    if (!visible && isOpen) close();  // 隐藏前先收起菜单
+    nav.classList.toggle('fab-hidden', !visible);
+  }
+
+  return { init, render, open, close, updateActive, setVisible };
 })();
