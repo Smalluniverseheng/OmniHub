@@ -32,6 +32,47 @@ const App = (() => {
     }
 
     dismissSplash();
+    checkVersionAnnouncement();
+  }
+
+  // 新版本公告：版本不一致时弹出，必须点「知道了」关闭
+  function checkVersionAnnouncement() {
+    if (typeof APP_VERSION === 'undefined') return;
+    if (Store.state.lastSeenVersion === APP_VERSION) return;
+    var changes = [];
+    if (typeof CHANGELOG !== 'undefined') {
+      for (var i = CHANGELOG.length - 1; i >= 0; i--) {
+        if (CHANGELOG[i].version === APP_VERSION) { changes = CHANGELOG[i].changes; break; }
+      }
+    }
+    var overlay = document.createElement('div');
+    overlay.className = 'update-overlay';
+    var html = '<div class="update-card">';
+    html += '<div class="update-title">v' + escapeHtml(APP_VERSION) + ' 更新</div>';
+    if (changes.length) {
+      html += '<ul class="update-list">';
+      for (var j = 0; j < changes.length; j++) {
+        html += '<li>' + escapeHtml(changes[j]) + '</li>';
+      }
+      html += '</ul>';
+    }
+    html += '<button class="update-btn" id="updateAnnounceOk">知道了</button>';
+    html += '</div>';
+    overlay.innerHTML = html;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#updateAnnounceOk').addEventListener('click', function() {
+      Store.state.lastSeenVersion = APP_VERSION;
+      Store.save();
+      overlay.remove();
+    });
+    // 遮罩点击不关闭：不绑定 overlay 点击事件
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   function dismissSplash() {
