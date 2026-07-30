@@ -40,7 +40,7 @@ const ReadModule = (() => {
     return filtered.map(b => `
       <div class="shelf-item" data-url="${esc(b.url)}" data-type="${b.type}">
         <div class="shelf-cover">
-          ${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy">` : `<div class="shelf-cover-placeholder">${b.type === 'comic' ? '📖' : '📕'}</div>`}
+          ' + (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">' : '<div class="shelf-cover-placeholder">' + (b.type === 'comic' ? '📖' : '📕') + '</div>') + '
         </div>
         <div class="shelf-name">${esc(b.title)}</div>
         ${b.chapterName ? `<div style="font-size:11px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(b.chapterName)}</div>` : ''}
@@ -229,7 +229,7 @@ const ReadModule = (() => {
     }
     box.innerHTML = list.map(b => `
       <div class="result-item" data-url="${esc(b.url || b.id)}" data-name="${esc(b.name)}" data-cover="${esc(b.cover || '')}" data-media="${b.mediaType || 'novel'}" data-source="${esc(b.sourceKey || b.sourceName || '')}">
-        <div class="result-cover">${b.cover ? `<img src="${esc(b.cover)}" alt="">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">${b.mediaType === 'comic' ? '📖' : '📕'}</div>`}</div>
+        <div class="result-cover">' + (b.cover ? '<img src="' + esc(b.cover) + '" alt="">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">' + (b.mediaType === 'comic' ? '📖' : '📕') + '</div>') + '</div>
         <div class="result-info">
           <div class="result-title">${esc(b.name)}</div>
           <div class="result-meta">${esc(b.author || '未知')} · ${esc(b.sourceKey || b.sourceName || '')}</div>
