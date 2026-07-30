@@ -215,7 +215,7 @@ const ProfileModule = (() => {
     html += '<div class="settings-group-title">' + t('about') + '</div>';
     html += '<div class="settings-row">';
     html += '<div class="settings-row-left"><div class="settings-row-icon">📦</div><span class="settings-row-text">OmniHub</span></div>';
-    html += '<div class="settings-row-right">v7.1</div></div>';
+    html += '<div class="settings-row-right">v7.2</div></div>';
     html += '</div>';
 
     body.innerHTML = html;
