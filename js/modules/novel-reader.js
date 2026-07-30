@@ -18,6 +18,8 @@ const NovelReader = (() => {
     bgMode: 'dark'
   };
 
+  var eventsBound = false;
+
   function open(book) {
     state.bookTitle = book.title;
     state.bookUrl = book.url;
@@ -37,8 +39,13 @@ const NovelReader = (() => {
       document.body.style.overflow = 'hidden';
     }
 
+    if (window.Nav && Nav.setVisible) Nav.setVisible(false);
+
     loadChapter(state.currentChapter);
-    bindEvents();
+    if (!eventsBound) {
+      bindEvents();
+      eventsBound = true;
+    }
   }
 
   function close() {
@@ -48,6 +55,7 @@ const NovelReader = (() => {
       overlay.classList.add('hidden');
       document.body.style.overflow = '';
     }
+    if (window.Nav && Nav.setVisible) Nav.setVisible(true);
   }
 
   async function loadChapter(idx) {
@@ -164,6 +172,8 @@ const NovelReader = (() => {
     if (top) top.classList.toggle('open', state.scaffoldOpen);
     if (bottom) bottom.classList.toggle('open', state.scaffoldOpen);
     if (float) float.classList.toggle('open', state.scaffoldOpen);
+    // 悬浮球跟随工具栏：清屏时隐藏，呼出工具栏时显示
+    if (window.Nav && Nav.setVisible) Nav.setVisible(state.scaffoldOpen);
     if (title) title.textContent = state.bookTitle;
     if (indicator) indicator.textContent = '第' + (state.currentChapter + 1) + '章 / 共' + state.chapters.length + '章';
   }
