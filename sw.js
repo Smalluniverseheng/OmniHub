@@ -1,4 +1,4 @@
-const VERSION = 'v7.2';
+const VERSION = 'v7.3';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [
@@ -17,6 +17,8 @@ const ASSETS = [
   '/js/modules/novel-reader.js',
   '/js/changelog.js',
   '/js/venera-engine.js',
+  '/js/legado-engine.js',
+  '/js/source-detect.js',
   '/js/providers.js',
   '/assets/brand.jpg',
   '/icons/icon-192.png',
