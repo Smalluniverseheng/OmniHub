@@ -135,5 +135,32 @@ const AIProviders = (() => {
     return h;
   }
 
-  return { list, get, chatCompletionsUrl, headers };
+  // aiBeta 模型目录厂商名 → OmniHub 厂商 keySlug 映射
+  // 与 AIProviders.name 一致的直接命中；别名归入就近厂商；其余归 'custom'
+  const MODEL_PROVIDER_MAP = {
+    '月之暗面': 'kimi',
+    '字节跳动': 'volcengine'
+  };
+
+  function mapModelProvider(name) {
+    if (!name) return 'custom';
+    for (var i = 0; i < PROVIDERS.length; i++) {
+      if (PROVIDERS[i].name === name) return PROVIDERS[i].keySlug;
+    }
+    if (MODEL_PROVIDER_MAP[name]) return MODEL_PROVIDER_MAP[name];
+    return 'custom';
+  }
+
+  // 按 API Key 前缀猜测厂商（下拉默认选中项）
+  function guessKeyProvider(apiKey) {
+    var key = String(apiKey || '').trim();
+    if (/^sk-ant-/i.test(key)) return 'anthropic';
+    if (/^AIza/.test(key)) return 'google';
+    if (/^gsk_/.test(key)) return 'groq';
+    if (/^xai-/i.test(key)) return 'xai';
+    if (/^sk-/i.test(key)) return 'openai';
+    return 'openai';
+  }
+
+  return { list, get, chatCompletionsUrl, headers, mapModelProvider, guessKeyProvider };
 })();
