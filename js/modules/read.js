@@ -5,9 +5,39 @@ const ReadModule = (() => {
 
   var currentTab = 'all';
 
+  var ENGINE_META = {
+    legado: { label: 'Legado', color: '#2e9e5b' },
+    venera: { label: 'Venera', color: '#6366F1' },
+    css:    { label: 'CSS',    color: '#8a8f99' }
+  };
+
   function init() {
+    migrateSources();
     renderRead();
     bindEvents();
+  }
+
+  /* ---------- 老数据迁移：无 engine 的按 type 推断 ---------- */
+  function migrateSources() {
+    var changed = false;
+    Store.state.read.sources.forEach(function(s) {
+      if (!s.engine) {
+        s.engine = s.type === 'venera' ? 'venera' : 'css';
+        changed = true;
+      }
+      if (s.enabled === undefined) { s.enabled = true; changed = true; }
+    });
+    if (changed) Store.save();
+  }
+
+  function engineOf(src) {
+    return src.engine || (src.type === 'venera' ? 'venera' : 'css');
+  }
+
+  function findSource(key) {
+    return Store.state.read.sources.find(function(s) {
+      return s.name === key || s.key === key || s.id === key;
+    });
   }
 
   function renderRead() {
@@ -99,19 +129,27 @@ const ReadModule = (() => {
   }
 
   async function openBook(book) {
-    var src = Store.state.read.sources.find(function(s) { return s.name === book.source || s.key === book.source; });
+    var src = findSource(book.source);
     if (!src) return Toast.show('书源已删除', 'error');
 
+    var engine = engineOf(src);
     var chapters = [];
     try {
-      if (src.type === 'venera' && typeof VeneraEngine !== 'undefined') {
+      if (engine === 'legado' && typeof LegadoEngine !== 'undefined') {
+        var info = null;
+        try { info = await LegadoEngine.getBookInfo(src.raw, book.url); } catch(e) { console.warn('Legado 详情获取失败:', e); }
+        chapters = await LegadoEngine.getToc(src.raw, { url: book.url }, info && info.tocUrl);
+        // 分卷标题没有章节地址，阅读器不支持，过滤
+        chapters = chapters.filter(function(c) { return c.url; });
+      } else if (engine === 'venera' && typeof VeneraEngine !== 'undefined') {
         var det = await VeneraEngine.getComicDetails(src.key || src.name, book.url);
         chapters = det ? det.chapters : [];
       } else {
         chapters = await fetchChaptersCss(book.url, src);
       }
     } catch(e) {
-      return Toast.show('获取章节失败', 'error');
+      console.warn('获取章节失败:', e);
+      return Toast.show('获取章节失败: ' + (e.message || ''), 'error');
     }
 
     if (!chapters.length) return Toast.show('未找到章节', 'error');
@@ -125,7 +163,7 @@ const ReadModule = (() => {
           title: book.title,
           url: book.url,
           source: book.source,
-          sourceType: src.type,
+          sourceType: engine,
           chapters: chapters,
           currentChapter: chapterIdx
         });
@@ -138,7 +176,7 @@ const ReadModule = (() => {
           title: book.title,
           url: book.url,
           source: book.source,
-          sourceType: src.type,
+          sourceType: engine,
           chapters: chapters,
           currentChapter: chapterIdx,
           currentPage: shelfBook ? (shelfBook.pageIdx || 0) : 0
@@ -185,11 +223,16 @@ const ReadModule = (() => {
     }
 
     var all = [];
+    var failures = [];
     for (var i = 0; i < sources.length; i++) {
       var src = sources[i];
+      var engine = engineOf(src);
       try {
         var list = [];
-        if (src.type === 'venera' && typeof VeneraEngine !== 'undefined') {
+        if (engine === 'legado' && typeof LegadoEngine !== 'undefined') {
+          list = await LegadoEngine.search(src.raw, keyword);
+          list.forEach(function(b) { b.sourceName = src.name; b.mediaType = b.mediaType || src.mediaType || 'novel'; });
+        } else if (engine === 'venera' && typeof VeneraEngine !== 'undefined') {
           list = await VeneraEngine.search(src.key || src.name, keyword, {}, 1);
           list.forEach(function(b) { b.sourceKey = src.key || src.name; b.sourceType = 'venera'; b.mediaType = src.mediaType || 'comic'; });
         } else {
@@ -197,10 +240,13 @@ const ReadModule = (() => {
           list.forEach(function(b) { b.sourceName = src.name; b.mediaType = src.mediaType || 'novel'; });
         }
         all.push.apply(all, list);
-      } catch(e) { console.warn('搜索失败:', src.name, e); }
+      } catch(e) {
+        console.warn('搜索失败:', src.name, e);
+        failures.push(src.name + '（' + (e.message || '未知错误') + '）');
+      }
     }
 
-    renderSearchResults(all);
+    renderSearchResults(all, failures);
   }
 
   async function searchCssSource(src, keyword) {
@@ -233,32 +279,42 @@ const ReadModule = (() => {
     } catch(e) { return []; }
   }
 
-  function renderSearchResults(list) {
+  function renderSearchResults(list, failures) {
     var box = document.getElementById('readSearchResults');
-    if (!list.length) {
-      box.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">未找到结果</div></div>';
-      return;
-    }
-
     var html = '';
-    list.forEach(function(b) {
-      html += '<div class="result-item" data-url="' + esc(b.url || b.id) + '" data-name="' + esc(b.name) + '" data-cover="' + esc(b.cover || '') + '" data-media="' + (b.mediaType || 'novel') + '" data-source="' + esc(b.sourceKey || b.sourceName || '') + '">';
-      html += '<div class="result-cover">';
-      if (b.cover) {
-        html += '<img src="' + esc(b.cover) + '" alt="">';
-      } else {
-        html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">' + (b.mediaType === 'comic' ? '📖' : '📕') + '</div>';
-      }
+    if (!list.length) {
+      html += '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">未找到结果</div></div>';
+    } else {
+      list.forEach(function(b) {
+        html += '<div class="result-item" data-url="' + esc(b.url || b.id) + '" data-name="' + esc(b.name) + '" data-cover="' + esc(b.cover || '') + '" data-media="' + (b.mediaType || 'novel') + '" data-source="' + esc(b.sourceKey || b.sourceName || b.source || '') + '">';
+        html += '<div class="result-cover">';
+        if (b.cover) {
+          html += '<img src="' + esc(b.cover) + '" alt="">';
+        } else {
+          html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">' + (b.mediaType === 'comic' ? '📖' : '📕') + '</div>';
+        }
+        html += '</div>';
+        html += '<div class="result-info">';
+        html += '<div class="result-title">' + esc(b.name) + '</div>';
+        html += '<div class="result-meta">' + esc(b.author || '未知') + ' · ' + esc(b.sourceKey || b.sourceName || b.source || '') + '</div>';
+        html += '<div class="result-actions">';
+        html += '<button class="result-btn primary add-shelf-btn" data-url="' + esc(b.url || b.id) + '">加入书架</button>';
+        html += '<button class="result-btn read-now-btn" data-url="' + esc(b.url || b.id) + '">立即阅读</button>';
+        html += '</div></div></div>';
+      });
+    }
+    // 失败书源汇总提示
+    if (failures && failures.length) {
+      html += '<div style="padding:12px 16px;font-size:12px;color:var(--text-2);border-top:1px solid var(--border);margin-top:8px;">';
+      html += '以下书源搜索失败：' + esc(failures.join('、'));
       html += '</div>';
-      html += '<div class="result-info">';
-      html += '<div class="result-title">' + esc(b.name) + '</div>';
-      html += '<div class="result-meta">' + esc(b.author || '未知') + ' · ' + esc(b.sourceKey || b.sourceName || '') + '</div>';
-      html += '<div class="result-actions">';
-      html += '<button class="result-btn primary add-shelf-btn" data-url="' + esc(b.url || b.id) + '">加入书架</button>';
-      html += '<button class="result-btn read-now-btn" data-url="' + esc(b.url || b.id) + '">立即阅读</button>';
-      html += '</div></div></div>';
-    });
+    }
     box.innerHTML = html;
+  }
+
+  function engineBadge(engine) {
+    var meta = ENGINE_META[engine] || ENGINE_META.css;
+    return '<span class="source-item-tag" style="background:' + meta.color + '22;color:' + meta.color + ';">' + meta.label + '</span>';
   }
 
   function renderSourceList() {
@@ -273,17 +329,96 @@ const ReadModule = (() => {
 
     var html = '';
     sources.forEach(function(s) {
+      var engine = engineOf(s);
       html += '<div class="source-item">';
       html += '<div class="source-item-info">';
-      html += '<div class="source-item-name">' + esc(s.name) + (s.type === 'venera' ? '<span class="source-item-tag">Venera</span>' : '') + '</div>';
+      html += '<div class="source-item-name">' + esc(s.name) + engineBadge(engine);
+      html += '<span class="source-item-tag">' + (s.mediaType === 'comic' ? '漫画' : '小说') + '</span>';
+      html += '</div>';
       html += '<div class="source-item-url">' + esc(s.url) + '</div>';
       html += '</div>';
       html += '<div class="source-item-actions">';
-      html += '<button class="source-item-btn test-source" data-name="' + esc(s.name) + '">测试</button>';
+      html += '<button class="source-item-btn toggle-source" data-name="' + esc(s.name) + '">' + (s.enabled ? '停用' : '启用') + '</button>';
       html += '<button class="source-item-btn danger del-source" data-name="' + esc(s.name) + '">删除</button>';
       html += '</div></div>';
     });
     box.innerHTML = html;
+  }
+
+  /* ---------- 书源导入：自动识别格式 ---------- */
+  async function importSource(text) {
+    if (typeof SourceDetect === 'undefined') return Toast.show('识别模块未加载', 'error');
+    var det;
+    try { det = await SourceDetect.detect(text); }
+    catch(e) { return Toast.show('识别失败: ' + e.message, 'error'); }
+
+    var labelMap = {
+      legado: 'Legado 书源', venera: 'Venera 图源', 'css-config': 'CSS 选择器配置'
+    };
+
+    if (det.type === 'legado') {
+      var n = 0;
+      det.sources.forEach(function(o) {
+        if (Store.state.read.sources.find(function(x) { return x.name === o.bookSourceName; })) return;
+        Store.state.read.sources.push({
+          id: 'legado_' + Date.now() + '_' + n,
+          name: o.bookSourceName,
+          url: o.bookSourceUrl,
+          engine: 'legado',
+          type: 'legado',
+          mediaType: o.bookSourceType === 2 ? 'comic' : 'novel',
+          enabled: true,
+          raw: o,
+          addedAt: Date.now()
+        });
+        n++;
+      });
+      Store.save();
+      Toast.show('识别为 Legado 格式，成功导入 ' + n + ' 个书源' + (det.message ? '，' + det.message : ''));
+      renderSourceList();
+    } else if (det.type === 'venera') {
+      if (typeof VeneraEngine === 'undefined') return Toast.show('Venera 引擎未加载', 'error');
+      try {
+        var src = await VeneraEngine.loadSource(text, 'venera_source');
+        Store.state.read.sources.push({
+          id: 'venera_' + Date.now(),
+          name: src.name, key: src.key,
+          engine: 'venera', type: 'venera',
+          url: src.url || '', version: src.version || '',
+          mediaType: 'comic', enabled: true,
+          raw: text,
+          addedAt: Date.now()
+        });
+        Store.save();
+        Toast.show('识别为 Venera 格式，成功导入 1 个书源: ' + src.name);
+        renderSourceList();
+      } catch(e) {
+        Toast.show('Venera 图源导入失败: ' + e.message, 'error');
+      }
+    } else if (det.type === 'css-config') {
+      var m = 0;
+      det.sources.forEach(function(s) {
+        if (!s.name || !s.url) return;
+        if (Store.state.read.sources.find(function(x) { return x.name === s.name; })) return;
+        Store.state.read.sources.push({
+          id: 'css_' + Date.now() + '_' + m,
+          name: s.name, url: s.url,
+          engine: 'css', type: 'css',
+          mediaType: s.mediaType || 'novel', enabled: true,
+          searchUrl: s.searchUrl || '', searchList: s.searchList || '',
+          searchName: s.searchName || '', chapterList: s.chapterList || '',
+          images: s.images || '',
+          addedAt: Date.now()
+        });
+        m++;
+      });
+      Store.save();
+      Toast.show('识别为 CSS 选择器配置，成功导入 ' + m + ' 个书源');
+      renderSourceList();
+    } else {
+      // venera-index / legado-js / unknown
+      Toast.show(det.message || '无法识别的书源格式', 'error');
+    }
   }
 
   function bindEvents() {
@@ -312,48 +447,34 @@ const ReadModule = (() => {
         if (!input) return;
         var text = input.value.trim();
         if (!text) return Toast.show('请输入书源内容', 'error');
+        await importSource(text);
+        input.value = '';
+      });
+    }
 
-        var isVenera = text.indexOf('extends ComicSource') > -1 || (text.indexOf('class') > -1 && text.indexOf('search') > -1 && text.indexOf('comic') > -1);
-
-        if (isVenera && typeof VeneraEngine !== 'undefined') {
-          try {
-            var src = await VeneraEngine.loadSource(text, 'venera_source');
-            Store.state.read.sources.push({
-              name: src.name, key: src.key, type: 'venera',
-              url: src.url || '', version: src.version || '',
-              mediaType: 'comic', enabled: true
-            });
+    // 书源列表操作（事件委托）：启用开关 / 删除
+    var listBox = document.getElementById('sourceList');
+    if (listBox) {
+      listBox.addEventListener('click', function(e) {
+        var toggleBtn = e.target.closest('.toggle-source');
+        if (toggleBtn) {
+          var s1 = findSource(toggleBtn.dataset.name);
+          if (s1) {
+            s1.enabled = !s1.enabled;
             Store.save();
-            Toast.show('Venera 图源导入成功: ' + src.name);
-            input.value = '';
             renderSourceList();
-          } catch(e) {
-            Toast.show('导入失败: ' + e.message, 'error');
+            Toast.show(s1.enabled ? '已启用: ' + s1.name : '已停用: ' + s1.name);
           }
-        } else {
-          try {
-            var data = JSON.parse(text);
-            var sources = Array.isArray(data) ? data : [data];
-            var n = 0;
-            sources.forEach(function(s) {
-              if (!s.name || !s.url) return;
-              if (!Store.state.read.sources.find(function(x) { return x.name === s.name; })) {
-                Store.state.read.sources.push({
-                  name: s.name, url: s.url, type: 'css',
-                  mediaType: s.mediaType || 'novel', enabled: true,
-                  searchUrl: s.searchUrl || '', searchList: s.searchList || '',
-                  searchName: s.searchName || '', chapterList: s.chapterList || '',
-                  images: s.images || ''
-                });
-                n++;
-              }
-            });
+          return;
+        }
+        var delBtn = e.target.closest('.del-source');
+        if (delBtn) {
+          var s2 = findSource(delBtn.dataset.name);
+          if (s2 && confirm('确定删除书源「' + s2.name + '」？')) {
+            Store.state.read.sources = Store.state.read.sources.filter(function(x) { return x !== s2; });
             Store.save();
-            Toast.show('导入 ' + n + ' 个书源');
-            input.value = '';
             renderSourceList();
-          } catch(e) {
-            Toast.show('格式错误，请检查JSON', 'error');
+            Toast.show('已删除: ' + s2.name);
           }
         }
       });
