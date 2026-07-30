@@ -49,7 +49,16 @@ const Store = (() => {
       mode: 'chat',       // 'chat' | 'image'
       temperature: 0.7,
       maxTokens: 4096,
-      conversations: []   // [{id,title,messages:[{id,role,content,image,ts}],createdAt,updatedAt}]
+      presets: [],        // 常用语 [{id,title,content}]
+      thinkingEnabled: false, // 深度思考开关
+      voice: {            // 语音播报设置
+        engine: 'browser',  // 'browser' | 'openai'
+        voiceURI: '',       // 浏览器引擎音色
+        ttsVoice: 'alloy',  // OpenAI TTS 音色
+        rate: 1,            // 语速 0.5-2
+        autoSpeak: false    // AI 回复完成自动朗读
+      },
+      conversations: []   // [{id,title,messages:[{id,role,content,image,images,files,thinking,ts}],createdAt,updatedAt}]
     },
 
     // 会员/账号
