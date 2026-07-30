@@ -27,6 +27,8 @@ const Reader = (() => {
       document.body.style.overflow = 'hidden';
     }
 
+    if (window.Nav && Nav.setVisible) Nav.setVisible(false);
+
     loadChapter(state.currentChapter);
   }
 
@@ -37,6 +39,7 @@ const Reader = (() => {
       overlay.classList.add('hidden');
       document.body.style.overflow = '';
     }
+    if (window.Nav && Nav.setVisible) Nav.setVisible(true);
   }
 
   async function loadChapter(idx) {
@@ -149,6 +152,8 @@ const Reader = (() => {
     if (top) top.classList.toggle('open', state.scaffoldOpen);
     if (bottom) bottom.classList.toggle('open', state.scaffoldOpen);
     if (float) float.classList.toggle('open', state.scaffoldOpen);
+    // 悬浮球跟随工具栏：清屏时隐藏，呼出工具栏时显示
+    if (window.Nav && Nav.setVisible) Nav.setVisible(state.scaffoldOpen);
     if (title) {
       const chName = state.chapters[state.currentChapter]?.name || '';
       title.textContent = state.bookTitle + (chName ? ' · ' + chName : '');
@@ -294,11 +299,12 @@ const Reader = (() => {
       }
     });
 
-    // 阅读模式切换
-    document.querySelectorAll('.reader-mode-option').forEach(btn => {
+    // 阅读模式切换（限定漫画阅读器设置面板，避免误绑小说背景按钮）
+    document.querySelectorAll('#readerSettingsPanel .reader-mode-option').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!btn.dataset.mode) return;
         state.mode = btn.dataset.mode;
-        document.querySelectorAll('.reader-mode-option').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#readerSettingsPanel .reader-mode-option').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         render();
       });
