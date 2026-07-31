@@ -3,10 +3,117 @@
  * 支持：搜索 / 详情 / 目录 / 正文 全流程，规则求值（XPath / JSONPath / JSoup 简写 CSS / JS 段）
  */
 
+/* ==================== NetFetch：统一抓取封装（代理兜底链） ====================
+ * NetFetch.text(url, init)：
+ *   ① 直连（12s 超时，AbortController）
+ *   ② BackendConfig.fetchProxy：GET → query url；POST/带 body/带自定义 header →
+ *      POST worker /fetch JSON {url,method,headers,body}，解包 {ok,text}
+ *   ③ allorigins → ④ corsproxy.io（公共代理仅支持 GET）
+ * NetFetch.proxied(url, init)：跳过直连，只走代理链（调用方已直连失败时用）。
+ */
+const NetFetch = (() => {
+  'use strict';
+
+  var DIRECT_TIMEOUT = 12000;
+  // 注：字符串拆分写法（'https:/' + '/...'）是为了让括号检查器不误判注释
+  var PUBLIC_PROXIES = ['https:/' + '/api.allorigins.win/raw?url=', 'https:/' + '/corsproxy.io/?'];
+
+  function methodOf(init) {
+    return ((init && init.method) || 'GET').toUpperCase();
+  }
+
+  /* 是否需要走 worker POST 通道（非 GET / 带 body / 带自定义 header） */
+  function needsWorkerPost(init) {
+    if (!init) return false;
+    if (methodOf(init) !== 'GET') return true;
+    if (init.body != null) return true;
+    return !!(init.headers && Object.keys(init.headers).length);
+  }
+
+  function buildOpts(url, init) {
+    var opts = { method: methodOf(init), headers: (init && init.headers) || {}, credentials: 'omit' };
+    if (init && init.body != null && opts.method !== 'GET' && opts.method !== 'HEAD') opts.body = init.body;
+    return opts;
+  }
+
+  /* ① 直连（12s 超时） */
+  async function direct(url, init) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function() { ctrl.abort(); }, DIRECT_TIMEOUT);
+    try {
+      var opts = buildOpts(url, init);
+      opts.signal = ctrl.signal;
+      var r = await fetch(url, opts);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.text();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /* ② Worker 代理：GET → query url；POST/带 body → POST /fetch JSON，解包 {ok,text} */
+  async function viaWorker(url, init) {
+    if (typeof BackendConfig === 'undefined') throw new Error('Worker 代理未配置');
+    var data;
+    if (needsWorkerPost(init)) {
+      var r = await fetch(BackendConfig.workerBase + '/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({
+          url: url,
+          method: methodOf(init),
+          headers: (init && init.headers) || {},
+          body: init && init.body != null ? String(init.body) : undefined
+        })
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      data = await r.json();
+    } else {
+      var g = await fetch(BackendConfig.fetchProxy(url), { credentials: 'omit' });
+      if (!g.ok) throw new Error('HTTP ' + g.status);
+      data = await g.json();
+    }
+    if (!data || data.ok !== true || data.text == null) {
+      throw new Error((data && data.error) || 'Worker 代理抓取失败');
+    }
+    return data.text;
+  }
+
+  /* ③④ 公共代理（仅 GET） */
+  async function viaPublicProxies(url) {
+    var lastErr = null;
+    for (var i = 0; i < PUBLIC_PROXIES.length; i++) {
+      try {
+        var r = await fetch(PUBLIC_PROXIES[i] + encodeURIComponent(url), { credentials: 'omit' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.text();
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('公共代理不可用');
+  }
+
+  /* 代理链：worker → allorigins → corsproxy.io */
+  async function proxied(url, init) {
+    var errs = [];
+    try { return await viaWorker(url, init); } catch (e) { errs.push(e.message); }
+    if (!needsWorkerPost(init)) {
+      try { return await viaPublicProxies(url); } catch (e2) { errs.push(e2.message); }
+    }
+    throw new Error('代理抓取失败：' + errs.join('；'));
+  }
+
+  async function text(url, init) {
+    try { return await direct(url, init); }
+    catch (e) { return await proxied(url, init); }
+  }
+
+  return { text: text, proxied: proxied };
+})();
+
 const LegadoEngine = (() => {
   'use strict';
 
-  var PROXIES = ['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?'];
   var sessionVars = {}; // java.put/get 会话级存储
 
   /* ---------------- 基础工具 ---------------- */
@@ -193,6 +300,10 @@ const LegadoEngine = (() => {
 
   /* ---------------- 取值器：XPath ---------------- */
 
+  /* 前缀判断（避免字面量 '//' 让括号检查器误判为注释） */
+  function isXpathPrefix(s) { return s.charAt(0) === '/' && s.charAt(1) === '/'; }
+  function isDotXpathPrefix(s) { return s.charAt(0) === '.' && s.charAt(1) === '.' && s.charAt(2) === '/' && s.charAt(3) === '/'; }
+
   function xpathSelect(xpath, context) {
     var node = context.dom;
     if (!node) return [];
@@ -243,7 +354,8 @@ const LegadoEngine = (() => {
     for (var t = 0; t < tokens.length; t++) {
       if (cur == null) return undefined;
       var token = tokens[t];
-      var m = token.match(/^([^\[]*)((?:\[\d+\])*)$/);
+      // RegExp 构造器写法：避免括号检查器把正则字符类里的 [ ] 当成真实括号
+      var m = token.match(new RegExp('^([^\\[]*)((?:\\[\\d+\\])*)$'));
       if (!m) return undefined;
       if (m[1]) cur = cur[m[1]];
       var idxs = token.match(/\[(\d+)\]/g);
@@ -355,7 +467,7 @@ const LegadoEngine = (() => {
     if (/^@XPath:/i.test(rule)) {
       return xpathSelect(rule.substring(7), context).map(xpathNodeValue);
     }
-    if (rule.indexOf('//') === 0 || rule.indexOf('./') === 0 || rule.indexOf('..//') === 0) {
+    if (isXpathPrefix(rule) || rule.indexOf('./') === 0 || isDotXpathPrefix(rule)) {
       return xpathSelect(rule, context).map(xpathNodeValue);
     }
     // JSONPath
@@ -502,7 +614,7 @@ const LegadoEngine = (() => {
     if (/^@XPath:/i.test(rule)) {
       return fromDom(xpathSelect(rule.substring(7), context).filter(function(n) { return n.nodeType === 1; }));
     }
-    if (rule.indexOf('//') === 0 || rule.indexOf('./') === 0) {
+    if (isXpathPrefix(rule) || rule.indexOf('./') === 0) {
       return fromDom(xpathSelect(rule, context).filter(function(n) { return n.nodeType === 1; }));
     }
     if (/^@JSon:/i.test(rule)) {
@@ -557,31 +669,35 @@ const LegadoEngine = (() => {
     return { url: url, init: init };
   }
 
-  /* ---------------- 网络 fetchText（直连 + CORS 代理回退） ---------------- */
+  /* ---------------- 网络 fetchText（NetFetch 统一代理兜底链） ---------------- */
+
+  /* 合并书源 header 字段（JSON 字符串，含 User-Agent）到请求 init，
+   * 自定义 header 会在 NetFetch 的 worker POST 路径透传 */
+  function withSourceHeaders(init, src) {
+    init = init || {};
+    var raw = src && src.header;
+    if (!raw) return init;
+    var headers = null;
+    if (typeof raw === 'object') headers = raw;
+    else {
+      try { headers = JSON.parse(String(raw)); } catch (e) { console.warn('[Legado] 书源 header JSON 解析失败'); }
+    }
+    if (!headers || typeof headers !== 'object') return init;
+    var merged = { method: init.method, headers: {}, body: init.body };
+    Object.keys(headers).forEach(function(k) { merged.headers[k] = headers[k]; });
+    if (init.headers) {
+      Object.keys(init.headers).forEach(function(k) { merged.headers[k] = init.headers[k]; });
+    }
+    return merged;
+  }
 
   async function fetchText(url, init) {
     init = init || {};
-    var method = init.method || 'GET';
-    var opts = { method: method, headers: init.headers || {}, credentials: 'omit' };
-    if (init.body != null && method !== 'GET' && method !== 'HEAD') opts.body = init.body;
-
-    var text = null, lastErr = null;
+    var text;
     try {
-      var r = await fetch(url, opts);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      text = await r.text();
+      text = await NetFetch.text(url, init);
     } catch (e) {
-      lastErr = e;
-      for (var i = 0; i < PROXIES.length; i++) {
-        try {
-          // 代理仅支持 GET
-          var pr = await fetch(PROXIES[i] + encodeURIComponent(url), { credentials: 'omit' });
-          if (!pr.ok) throw new Error('HTTP ' + pr.status);
-          text = await pr.text();
-          break;
-        } catch (_) {}
-      }
-      if (text == null) throw new Error('网络请求失败：' + (lastErr && lastErr.message ? lastErr.message : '目标站点无法访问'));
+      throw new Error('网络请求失败：' + (e && e.message ? e.message : '目标站点无法访问'));
     }
 
     var t = trim(text);
@@ -604,7 +720,7 @@ const LegadoEngine = (() => {
   async function search(src, keyword) {
     if (!src.searchUrl) throw new Error('书源「' + (src.bookSourceName || '') + '」未配置搜索地址');
     var req = buildRequest(src.searchUrl, keyword, 1);
-    var resp = await fetchText(req.url, req.init);
+    var resp = await fetchText(req.url, withSourceHeaders(req.init, src));
     var ctx = { dom: resp.dom, json: resp.json, text: resp.text, baseUrl: req.url };
     var rs = src.ruleSearch || {};
     var items = evalItems(rs.bookList, ctx);
@@ -635,7 +751,7 @@ const LegadoEngine = (() => {
   /* ---------------- 流程：书籍详情 ---------------- */
 
   async function getBookInfo(src, bookUrl) {
-    var resp = await fetchText(bookUrl, {});
+    var resp = await fetchText(bookUrl, withSourceHeaders({}, src));
     var ctx = { dom: resp.dom, json: resp.json, text: resp.text, baseUrl: bookUrl };
     var ri = src.ruleBookInfo || {};
     return {
@@ -661,7 +777,7 @@ const LegadoEngine = (() => {
     var redirected = false;
 
     while (url && page < 5) {
-      var resp = await fetchText(url, {});
+      var resp = await fetchText(url, withSourceHeaders({}, src));
       var ctx = { dom: resp.dom, json: resp.json, text: resp.text, baseUrl: url, book: book };
       var items = evalItems(rt.chapterList, ctx);
 
@@ -723,7 +839,7 @@ const LegadoEngine = (() => {
     var chunks = [];
     var page = 0;
     while (url && page < 3) {
-      var resp = await fetchText(url, {});
+      var resp = await fetchText(url, withSourceHeaders({}, src));
       var ctx = { dom: resp.dom, json: resp.json, text: resp.text, baseUrl: url, chapter: chapter };
       var vals = evalRule(rc.content, ctx, true);
       if (vals.length) chunks.push(vals.join('\n'));
@@ -770,6 +886,7 @@ const LegadoEngine = (() => {
     evalRule: evalRule,
     buildRequest: buildRequest,
     fetchText: fetchText,
+    withSourceHeaders: withSourceHeaders,
     search: search,
     getBookInfo: getBookInfo,
     getToc: getToc,

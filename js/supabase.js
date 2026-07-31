@@ -82,6 +82,11 @@ const SB = (() => {
     },
     signOut: async function() {
       clearPassword();
+      // 退出前尽力置离线 + 停心跳 + 清二级密码免验
+      try { markOfflineBest(); } catch (e) {}
+      try { stopHeartbeat(); } catch (e) {}
+      try { if (typeof window !== 'undefined' && window.Auth && window.Auth.clearBypass) window.Auth.clearBypass(); } catch (e) {}
+      try { if (typeof EventBus !== 'undefined' && EventBus.emit) EventBus.emit('auth:logout'); } catch (e) {}
       if (!ready()) return;
       try { await client.auth.signOut(); } catch (e) {}
     },
@@ -285,37 +290,64 @@ const SB = (() => {
 
   /* ==================== Sync ==================== */
 
-  /* 推送：设置白名单 → user_settings；API Key 加密 → encrypted_api_keys */
-  async function pushNow() {
+  /* 推送：设置白名单 → user_settings；API Key 加密 → encrypted_api_keys
+   * onProgress(done, total)：可选进度回调（diff 确认弹层的进度条用），
+   * 自动防抖推送不传 → 静默直传，不触发任何 UI。
+   */
+  async function pushNow(onProgress) {
     if (!canSync() || !Store.state.user.cloudSync) return { ok: false, skipped: true };
     const uid = Store.state.user.id;
     let err = null;
+    let payloadBytes = 0;   // 本次上传载荷字节数（写回 storage_used_mb 用）
+    const keys = Store.state.chat.keys || {};
+    const slugs = (hasPassword() && cryptoOk())
+      ? Object.keys(keys).filter(function(k) { return typeof keys[k] === 'string' && keys[k].trim(); })
+      : [];
+    const total = 1 + slugs.length + 1 + 1;   // 设置 + 各 Key + 对话 + 存储统计
+    let done = 0;
+    function tick() { done++; if (typeof onProgress === 'function') { try { onProgress(done, total); } catch (e) {} } }
+
     // 1) 设置白名单
     try {
+      const settings = pickSettings();
+      payloadBytes += JSON.stringify(settings).length;
       const r = await client.from('user_settings').upsert(
-        { user_id: uid, settings: pickSettings(), updated_at: nowIso() },
+        { user_id: uid, settings: settings, updated_at: nowIso() },
         { onConflict: 'user_id' }
       );
       if (r.error) err = r.error;
     } catch (e) { err = e; }
+    tick();
     // 2) API Keys 加密上传（密码派生密钥可用时；刷新后未输密码则跳过）
-    if (hasPassword() && cryptoOk()) {
-      const keys = Store.state.chat.keys || {};
-      const slugs = Object.keys(keys).filter(function(k) { return typeof keys[k] === 'string' && keys[k].trim(); });
-      for (let i = 0; i < slugs.length; i++) {
-        const provider = slugs[i];
-        try {
-          const box = await encryptText(keys[provider].trim());
-          if (!box) break;
+    for (let i = 0; i < slugs.length; i++) {
+      const provider = slugs[i];
+      try {
+        const box = await encryptText(keys[provider].trim());
+        if (box) {
+          payloadBytes += box.encrypted.length;
           const r = await client.from('encrypted_api_keys').upsert({
             user_id: uid, provider: provider,
             encrypted_key: box.encrypted, iv: box.iv, salt: box.salt,
             updated_at: nowIso()
           }, { onConflict: 'user_id,provider' });
           if (r.error && !err) err = r.error;
-        } catch (e) { if (!err) err = e; }
-      }
+        }
+      } catch (e) { if (!err) err = e; }
+      tick();
     }
+    // 3) 对话记录（5s 防抖的自动推送共用同一通道，内容未变时内部跳过）
+    try {
+      const cr = await pushChatConversations();
+      if (cr && cr.bytes) payloadBytes += cr.bytes;
+    } catch (e) {}
+    tick();
+    // 4) 存储用量统计：写回 profiles.storage_used_mb（列不存在/失败时静默）
+    try {
+      const mb = Math.round(payloadBytes / 1024 / 1024 * 100) / 100;
+      const sr = await client.from('profiles').update({ storage_used_mb: mb }).eq('id', uid);
+      if (!sr.error) Store.state.user.storageUsedMb = mb;
+    } catch (e) {}
+    tick();
     Store.state.user.lastSyncAt = Date.now();
     saveLocal();
     if (err) { console.warn('SB push error:', err); return { ok: false, error: err }; }
@@ -371,6 +403,8 @@ const SB = (() => {
           console.warn('SB: 云端存在加密 API Key，本会话无密码无法解密，已跳过（重新登录后可同步）');
         }
       }
+      // 4) 对话记录拉回合并（按 id 比对 updatedAt，新者胜）
+      try { if (await pullChatConversations()) changed = true; } catch (e) { console.warn('SB 对话拉取跳过:', e); }
       Store.state.user.lastSyncAt = Date.now();
       saveLocal();
       // 同步结果即时反映到界面
@@ -456,6 +490,341 @@ const SB = (() => {
     }
   }
 
+  /* ==================== 对话记录云端持久化 ====================
+   * user_data key='chat_conversations'；Store.save 后 5s 防抖推送；
+   * 合并策略：按 id 比对 updatedAt，新者胜。仅登录且开启云同步时生效。
+   */
+  let chatPushTimer = null;
+  let lastChatSig = '';   // 上次推送的对话签名（id+updatedAt），未变则跳过
+
+  function chatSig(convs) {
+    let s = '';
+    for (let i = 0; i < convs.length; i++) {
+      if (convs[i]) s += convs[i].id + ':' + (convs[i].updatedAt || 0) + ';';
+    }
+    return s;
+  }
+
+  function scheduleChatPush() {
+    if (!canSync() || !Store.state.user.cloudSync) return;
+    const convs = (Store.state.chat && Store.state.chat.conversations) || [];
+    if (chatSig(convs) === lastChatSig) return;
+    if (chatPushTimer) clearTimeout(chatPushTimer);
+    chatPushTimer = setTimeout(function() {
+      pushChatConversations().catch(function(e) { console.warn('SB 对话推送失败:', e); });
+    }, 5000);
+  }
+
+  async function pushChatConversations() {
+    if (!canSync() || !Store.state.user.cloudSync) return { ok: false, skipped: true };
+    const convs = (Store.state.chat && Store.state.chat.conversations) || [];
+    const sig = chatSig(convs);
+    if (sig === lastChatSig) return { ok: true, skipped: true };
+    let payload;
+    try { payload = JSON.parse(JSON.stringify(convs)); } catch (e) { return { ok: false, error: e }; }
+    try {
+      const r = await client.from('user_data').upsert(
+        { user_id: Store.state.user.id, key: 'chat_conversations', data: payload, updated_at: nowIso() },
+        { onConflict: 'user_id,key' }
+      );
+      if (r.error) {
+        console.warn('[SB] 对话推送失败（远端可能无 user_data 表）:', r.error.message || r.error);
+        return { ok: false, error: r.error };
+      }
+      lastChatSig = sig;
+      return { ok: true, bytes: JSON.stringify(payload).length };
+    } catch (e) { return { ok: false, error: e }; }
+  }
+
+  /* 拉回云端对话并按 id/updatedAt 合并（新者胜）；有变更返回 true */
+  async function pullChatConversations() {
+    if (!canSync()) return false;
+    const r = await client.from('user_data').select('data')
+      .eq('user_id', Store.state.user.id).eq('key', 'chat_conversations').maybeSingle();
+    if (r.error || !r.data || !Array.isArray(r.data.data)) return false;
+    const remote = r.data.data;
+    const local = (Store.state.chat && Store.state.chat.conversations) || [];
+    const map = {};
+    let changed = false;
+    local.forEach(function(c) { if (c && c.id) map[c.id] = c; });
+    remote.forEach(function(rc) {
+      if (!rc || !rc.id) return;
+      const lc = map[rc.id];
+      if (!lc || (rc.updatedAt || 0) > (lc.updatedAt || 0)) { map[rc.id] = rc; changed = true; }
+    });
+    if (!changed) { lastChatSig = chatSig(local); return false; }
+    const merged = Object.keys(map).map(function(k) { return map[k]; });
+    merged.sort(function(a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    Store.state.chat.conversations = merged;
+    lastChatSig = chatSig(merged);
+    saveLocal();
+    return true;
+  }
+
+  /* ==================== 设备管理 ====================
+   * user_devices：device_id = 指纹（UA+屏幕+时区 简hash），登录后 upsert；
+   * 心跳每 5 分钟刷 last_active/is_online（页面隐藏暂停）；
+   * beforeunload 尽力置离线（keepalive fetch，可带 Authorization header）。
+   */
+  let hbTimer = null;
+  let cachedToken = '';   // 访问令牌（仅内存，置离线 REST 用）
+
+  function simpleHash(str) {
+    let h1 = 5381, h2 = 52711;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      h1 = ((h1 * 33) ^ c) >>> 0;
+      h2 = ((h2 * 31) ^ c) >>> 0;
+    }
+    return h1.toString(16) + h2.toString(16);
+  }
+
+  function deviceFingerprint() {
+    const parts = [
+      navigator.userAgent || '',
+      (typeof screen !== 'undefined' ? screen.width + 'x' + screen.height + '@' + screen.colorDepth : ''),
+      (typeof Intl !== 'undefined' ? (Intl.DateTimeFormat().resolvedOptions().timeZone || '') : ''),
+      navigator.language || ''
+    ];
+    return 'dev_' + simpleHash(parts.join('|'));
+  }
+
+  /* UA 解析：浏览器 + OS + 设备类型 */
+  function parseDevice() {
+    const ua = navigator.userAgent || '';
+    let browser = '浏览器';
+    if (ua.indexOf('Edg/') !== -1) browser = 'Edge';
+    else if (ua.indexOf('Firefox/') !== -1) browser = 'Firefox';
+    else if (ua.indexOf('Chrome/') !== -1) browser = 'Chrome';
+    else if (ua.indexOf('Safari/') !== -1) browser = 'Safari';
+    let os = '未知系统';
+    if (/Windows NT/.test(ua)) os = 'Windows';
+    else if (/Android/.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
+    else if (/Mac OS X/.test(ua)) os = 'macOS';
+    else if (/Linux/.test(ua)) os = 'Linux';
+    let type = 'desktop';
+    if (/iPad|Tablet/.test(ua)) type = 'tablet';
+    else if (/Mobile|iPhone|Android/.test(ua)) type = 'mobile';
+    return { name: browser + ' · ' + os, type: type };
+  }
+
+  /* 本机设备指纹（缓存在 Store.state.auth.deviceId） */
+  function currentDeviceId() {
+    const box = Store.state.auth || (Store.state.auth = {});
+    if (!box.deviceId) box.deviceId = deviceFingerprint();
+    return box.deviceId;
+  }
+
+  /* 设备上限：会员（role 非 guest/user）20，其他 10 */
+  function deviceLimit() {
+    const role = (Store.state.user && Store.state.user.role) || 'guest';
+    return (role !== 'guest' && role !== 'user') ? 20 : 10;
+  }
+
+  /* 登录后注册/刷新本机设备；超限自动清理最久未用的非当前设备 */
+  async function registerDevice() {
+    if (!canSync()) return { ok: false, skipped: true };
+    const uid = Store.state.user.id;
+    const fid = currentDeviceId();
+    const info = parseDevice();
+    try {
+      const session = await Auth.getSession();
+      if (session && session.access_token) cachedToken = session.access_token;
+      const r = await client.from('user_devices').upsert({
+        user_id: uid, device_id: fid,
+        device_name: info.name, device_type: info.type,
+        is_current: true, is_online: true, last_active: nowIso()
+      }, { onConflict: 'user_id,device_id' });
+      if (r.error) {
+        console.warn('[SB] 设备注册失败（远端可能无 user_devices 表）:', r.error.message || r.error);
+        return { ok: false, error: r.error };
+      }
+      // 其他设备不再标记"当前"
+      try {
+        await client.from('user_devices').update({ is_current: false })
+          .eq('user_id', uid).neq('device_id', fid);
+      } catch (e) {}
+      // 超限清理：按 last_active 升序，删最旧的非当前设备
+      const lr = await client.from('user_devices').select('device_id,last_active')
+        .eq('user_id', uid).order('last_active', { ascending: true });
+      if (!lr.error && Array.isArray(lr.data)) {
+        const extra = lr.data.length - deviceLimit();
+        if (extra > 0) {
+          const victims = lr.data.filter(function(d) { return d.device_id !== fid; }).slice(0, extra);
+          for (let i = 0; i < victims.length; i++) {
+            try {
+              await client.from('user_devices').delete()
+                .eq('user_id', uid).eq('device_id', victims[i].device_id);
+            } catch (e) {}
+          }
+          if (victims.length && typeof Toast !== 'undefined' && Toast.show) Toast.show('已清理最久未用设备');
+        }
+      }
+      return { ok: true };
+    } catch (e) { console.warn('[SB] 设备注册异常:', e); return { ok: false, error: e }; }
+  }
+
+  async function listDevices() {
+    if (!canSync()) return [];
+    try {
+      const r = await client.from('user_devices')
+        .select('device_id,device_name,device_type,ip,is_online,trusted,last_active,is_current')
+        .eq('user_id', Store.state.user.id)
+        .order('last_active', { ascending: false });
+      if (r.error || !Array.isArray(r.data)) return [];
+      const fid = currentDeviceId();
+      return r.data.map(function(d) {
+        d.is_current = !!d.is_current || d.device_id === fid;
+        return d;
+      });
+    } catch (e) { return []; }
+  }
+
+  /* 踢出设备（不允许踢本机） */
+  async function removeDevice(deviceId) {
+    if (!canSync()) return { ok: false };
+    if (!deviceId || deviceId === currentDeviceId()) return { ok: false, error: new Error('不能踢出本机设备') };
+    try {
+      const r = await client.from('user_devices').delete()
+        .eq('user_id', Store.state.user.id).eq('device_id', deviceId);
+      if (r.error) return { ok: false, error: r.error };
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e }; }
+  }
+
+  /* 信任设备开关（trusted=true；邮箱验证状态由服务端会话保证，UI 侧另行注明） */
+  async function setDeviceTrusted(deviceId, trusted) {
+    if (!canSync() || !deviceId) return { ok: false };
+    try {
+      const r = await client.from('user_devices').update({ trusted: !!trusted })
+        .eq('user_id', Store.state.user.id).eq('device_id', deviceId);
+      if (r.error) return { ok: false, error: r.error };
+      // 本机信任态同步本地标记
+      if (deviceId === currentDeviceId()) {
+        const box = Store.state.auth || (Store.state.auth = {});
+        box.trusted = !!trusted;
+        saveLocal();
+      }
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e }; }
+  }
+
+  /* 心跳：每 5 分钟刷新 last_active/is_online；页面隐藏时暂停，回前台立即补一次 */
+  async function heartbeatBeat() {
+    if (!canSync() || document.hidden) return;
+    try {
+      const session = await Auth.getSession();
+      if (session && session.access_token) cachedToken = session.access_token;
+      await client.from('user_devices').update({ is_online: true, last_active: nowIso() })
+        .eq('user_id', Store.state.user.id).eq('device_id', currentDeviceId());
+    } catch (e) {}
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    if (!canSync()) return;
+    hbTimer = setInterval(heartbeatBeat, 5 * 60 * 1000);
+  }
+
+  function stopHeartbeat() {
+    if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
+  }
+
+  /* 退出/关闭页面时尽力置离线：keepalive fetch（可带 header），失败静默 */
+  function markOfflineBest() {
+    try {
+      if (typeof Store === 'undefined' || !Store.state.user || !Store.state.user.id || !cachedToken) return;
+      const url = SUPABASE_URL + '/rest/v1/user_devices?user_id=eq.' + encodeURIComponent(Store.state.user.id) +
+                  '&device_id=eq.' + encodeURIComponent(currentDeviceId());
+      fetch(url, {
+        method: 'PATCH',
+        keepalive: true,
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + cachedToken,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ is_online: false, last_active: nowIso() })
+      }).catch(function() {});
+    } catch (e) {}
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden && hbTimer) heartbeatBeat();
+    });
+  }
+  if (typeof window !== 'undefined') window.addEventListener('beforeunload', markOfflineBest);
+
+  /* ==================== 云同步 diff（确认弹层用） ==================== */
+  function diffCount(localObj, remoteObj) {
+    const out = { added: 0, changed: 0, removed: 0 };
+    const lo = localObj || {}, ro = remoteObj || {};
+    Object.keys(lo).forEach(function(k) {
+      if (!(k in ro)) out.added++;
+      else if (JSON.stringify(lo[k]) !== JSON.stringify(ro[k])) out.changed++;
+    });
+    Object.keys(ro).forEach(function(k) { if (!(k in lo)) out.removed++; });
+    return out;
+  }
+
+  /* 拉远端 user_settings + user_data 各 key，与本地对比出条目统计 */
+  async function computeDiff() {
+    if (!canSync()) return null;
+    const uid = Store.state.user.id;
+    let remoteSettings = {};
+    try {
+      const r = await client.from('user_settings').select('settings').eq('user_id', uid).maybeSingle();
+      if (!r.error && r.data && r.data.settings) remoteSettings = r.data.settings;
+    } catch (e) {}
+    // user_data：本地可能有的 key（书架/对话） vs 远端 key 列表
+    const localData = {};
+    if ((Store.state.read.shelf || []).length) localData.read_shelf = true;
+    if ((Store.state.chat.conversations || []).length) localData.chat_conversations = true;
+    const remoteData = {};
+    try {
+      const r = await client.from('user_data').select('key').eq('user_id', uid);
+      if (!r.error && Array.isArray(r.data)) r.data.forEach(function(row) { remoteData[row.key] = true; });
+    } catch (e) {}
+    return {
+      settings: diffCount(pickSettings(), remoteSettings),
+      data: diffCount(localData, remoteData)
+    };
+  }
+
+  /* ==================== 云端代理用量 ====================
+   * 近 30 天 token_usage 合计；表/列不存在（代理维度未上线）返回 null。
+   */
+  async function getProxyUsage() {
+    if (!canSync()) return null;
+    try {
+      const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+      const r = await client.from('token_usage').select('*')
+        .eq('user_id', Store.state.user.id).gte('created_at', since).limit(1000);
+      if (r.error || !Array.isArray(r.data)) return null;
+      let sum = 0;
+      r.data.forEach(function(row) {
+        const v = row.tokens !== undefined ? row.tokens : (row.count !== undefined ? row.count : row.amount);
+        sum += Number(v) || 0;
+      });
+      return sum;
+    } catch (e) { return null; }
+  }
+
+  const Devices = {
+    register: registerDevice,
+    list: listDevices,
+    remove: removeDevice,
+    setTrusted: setDeviceTrusted,
+    startHeartbeat: startHeartbeat,
+    stopHeartbeat: stopHeartbeat,
+    markOffline: markOfflineBest,
+    currentId: currentDeviceId,
+    limit: deviceLimit
+  };
+
   /* ==================== 启动恢复 ====================
    * app 启动时调用：getSession 有效则自动恢复登录态 + 后台 firstSync（不阻塞首屏）
    */
@@ -473,6 +842,9 @@ const SB = (() => {
     saveLocal();
     // 后台首次同步，不阻塞首屏
     firstSync().catch(function() {});
+    // 注册本机设备 + 启动心跳（不阻塞）
+    registerDevice().catch(function() {});
+    startHeartbeat();
     return true;
   }
 
@@ -481,7 +853,10 @@ const SB = (() => {
     const _origSave = Store.save;
     Store.save = function() {
       _origSave.apply(Store, arguments);
-      if (!suppress) schedulePush();
+      if (!suppress) {
+        schedulePush();
+        scheduleChatPush();   // 对话记录 5s 防抖推送（内容未变内部跳过）
+      }
     };
   }
 
@@ -500,6 +875,12 @@ const SB = (() => {
     pushReadShelf: pushReadShelf,
     uploadErrorLogs: uploadErrorLogs,
     restoreSession: restoreSession,
+    Devices: Devices,
+    registerDevice: registerDevice,
+    computeDiff: computeDiff,
+    getProxyUsage: getProxyUsage,
+    pushChatConversations: pushChatConversations,
+    pullChatConversations: pullChatConversations,
     _deriveKey: deriveKey
   };
 })();

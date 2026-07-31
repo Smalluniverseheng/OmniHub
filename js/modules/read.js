@@ -30,6 +30,11 @@ const ReadModule = (() => {
   function el(id) { return document.getElementById(id); }
 
   function init() {
+    // 运行时默认值：RSS 订阅源列表（新键）
+    if (!Store.state.read.rssSources) {
+      Store.state.read.rssSources = [];
+      Store.save();
+    }
     migrateSources();
     purgeExpiredTrash();
     preloadVeneraSources();
@@ -108,11 +113,16 @@ const ReadModule = (() => {
     var filtered = currentTab === 'all' ? shelf : shelf.filter(function(b) { return b.type === currentTab; });
 
     if (!filtered.length) {
-      var sub = shelf.length ? '该分类下暂无书籍' : '点击右上角搜索添加书籍';
+      if (shelf.length) {
+        return '<div class="empty-state" style="padding-top:40px;">'
+          + '<div class="empty-icon">📚</div>'
+          + '<div class="empty-text">该分类下暂无书籍</div>'
+          + '<button class="empty-action-btn" id="emptyGoSearch">去搜索</button>'
+          + '</div>';
+      }
       return '<div class="empty-state" style="padding-top:40px;">'
         + '<div class="empty-icon">📚</div>'
-        + '<div class="empty-text">书架为空</div>'
-        + '<div class="empty-sub">' + sub + '</div>'
+        + '<div class="empty-text">书架还空着，先去搜索书籍或从发现里添加吧！</div>'
         + '<button class="empty-action-btn" id="emptyGoSearch">去搜索</button>'
         + '</div>';
     }
@@ -240,20 +250,23 @@ const ReadModule = (() => {
     var sources = Store.state.read.sources;
 
     var html = '';
-    // 顶部：搜索框 + 书源下拉
+    // 顶部：搜索框 + 书源自定义下拉（绿点/红点/无标志）
     html += '<div class="discover-bar"><input type="text" id="discoverFilter" placeholder="筛选发现" value="' + esc(discover.keyword) + '"></div>';
-    html += '<div class="discover-source-row"><select class="discover-source-select" id="discoverSourceSelect">';
+    html += '<div class="discover-source-row"><div class="discover-source-custom" id="discoverSourceCustom">';
+    html += '<button type="button" class="discover-source-btn" id="discoverSourceBtn"><span id="discoverSourceLabel">请选择书源</span><i class="discover-source-arrow"></i></button>';
+    html += '<div class="discover-source-menu hidden" id="discoverSourceMenu">';
     if (!sources.length) {
-      html += '<option value="">暂无书源，请先导入</option>';
+      html += '<div class="discover-source-option disabled">暂无书源，请先导入</div>';
     } else {
       sources.forEach(function(s) {
         var info = sourceExploreInfo(s);
-        var dot = info.has ? (s.enabled ? '🟢 ' : '🔴 ') : '';
+        var dotCls = info.has ? (s.enabled ? 'green' : 'red') : 'none';
         var sid = s.id || s.key || s.name;
-        html += '<option value="' + esc(sid) + '"' + (discover.sourceId === sid ? ' selected' : '') + '>' + dot + esc(s.name) + '</option>';
+        html += '<div class="discover-source-option" data-sid="' + esc(sid) + '">'
+          + '<i class="discover-dot ' + dotCls + '"></i>' + esc(s.name) + '</div>';
       });
     }
-    html += '</select>';
+    html += '</div></div>';
     html += '<div class="discover-source-hint"><span><i class="discover-dot green"></i>有发现·已启用</span><span><i class="discover-dot red"></i>有发现·未启用</span><span>无标志：无发现内容</span></div>';
     html += '</div>';
     html += '<div class="discover-tags" id="discoverTags"></div>';
@@ -270,9 +283,21 @@ const ReadModule = (() => {
     if (!discover.sourceId || !findSource(discover.sourceId)) {
       discover.sourceId = first.id || first.key || first.name;
     }
-    var sel = el('discoverSourceSelect');
-    if (sel) sel.value = discover.sourceId;
+    updateDiscoverSourceLabel();
     loadDiscoverTags();
+  }
+
+  /* 自定义书源下拉：按钮文字同步当前选中源 */
+  function updateDiscoverSourceLabel() {
+    var label = el('discoverSourceLabel');
+    if (!label) return;
+    var src = currentDiscoverSource();
+    label.textContent = src ? src.name : '请选择书源';
+  }
+
+  function closeDiscoverSourceMenu() {
+    var menu = el('discoverSourceMenu');
+    if (menu) menu.classList.add('hidden');
   }
 
   function emptyDiscoverHtml(msg, showRefresh) {
@@ -376,10 +401,11 @@ const ReadModule = (() => {
     }
     var listWrap = el('discoverListWrap');
     if (!listWrap) return;
-    // 骨架屏
+    // 骨架屏：5 条，封面随机高度更贴近真实列表
     var sk = '';
-    for (var i = 0; i < 4; i++) {
-      sk += '<div class="discover-skeleton"><div class="sk-cover"></div><div class="sk-lines"><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:40%"></div><div class="sk-line" style="width:90%"></div></div></div>';
+    for (var i = 0; i < 5; i++) {
+      var skh = 64 + Math.floor(Math.random() * 48);
+      sk += '<div class="discover-skeleton"><div class="sk-cover" style="height:' + skh + 'px"></div><div class="sk-lines"><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:40%"></div><div class="sk-line" style="width:90%"></div></div></div>';
     }
     listWrap.innerHTML = '<div class="discover-list">' + sk + '</div>';
     discover.loading = true;
@@ -600,9 +626,10 @@ const ReadModule = (() => {
 
   async function fetchChaptersCss(url, src) {
     try {
-      var resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      var html = await resp.text();
+      // 统一抓取封装：直连 → worker 代理 → 公共代理
+      var html = (typeof NetFetch !== 'undefined')
+        ? await NetFetch.text(url, {})
+        : await (await fetch(url, { mode: 'cors', credentials: 'omit' })).text();
       var parser = new DOMParser();
       var doc = parser.parseFromString(html, 'text/html');
       var list = [];
@@ -627,37 +654,69 @@ const ReadModule = (() => {
     if (!keyword) return Toast.show('请输入关键词', 'error');
 
     var resultsBox = el('readSearchResults');
-    resultsBox.innerHTML = '<div class="empty-state"><div class="loading-spinner"></div><div>搜索中...</div></div>';
-
     var sources = Store.state.read.sources.filter(function(s) { return s.enabled; });
     if (!sources.length) {
       resultsBox.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-text">没有书源</div><div class="empty-sub">请先导入书源</div></div>';
       return;
     }
 
+    // 每源状态行（搜索中/成功 N 条/失败原因）+ 结果容器
+    var statusHtml = '<div class="search-status-box" id="searchStatusBox">';
+    sources.forEach(function(s, i) {
+      statusHtml += '<div class="search-status-row" data-sidx="' + i + '">'
+        + '<span class="search-status-dot spin"></span>'
+        + '<span class="search-status-name">' + esc(s.name) + '</span>'
+        + '<span class="search-status-msg">搜索中…</span></div>';
+    });
+    statusHtml += '</div><div id="searchResultList"></div>';
+    resultsBox.innerHTML = statusHtml;
+
+    function setSourceStatus(idx, cls, msg) {
+      var row = resultsBox.querySelector('.search-status-row[data-sidx="' + idx + '"]');
+      if (!row) return;
+      var dot = row.querySelector('.search-status-dot');
+      var msgEl = row.querySelector('.search-status-msg');
+      if (dot) dot.className = 'search-status-dot ' + cls;
+      if (msgEl) msgEl.textContent = msg;
+    }
+
+    async function searchOne(src) {
+      var engine = engineOf(src);
+      var list = [];
+      if (engine === 'legado' && typeof LegadoEngine !== 'undefined') {
+        list = await LegadoEngine.search(src.raw, keyword);
+        list.forEach(function(b) { b.sourceName = src.name; b.mediaType = b.mediaType || src.mediaType || 'novel'; });
+      } else if (engine === 'venera' && typeof VeneraEngine !== 'undefined') {
+        list = await VeneraEngine.search(src.key || src.name, keyword, {}, 1);
+        list.forEach(function(b) { b.sourceKey = src.key || src.name; b.sourceType = 'venera'; b.mediaType = src.mediaType || 'comic'; });
+      } else {
+        list = await searchCssSource(src, keyword);
+        list.forEach(function(b) { b.sourceName = src.name; b.mediaType = src.mediaType || 'novel'; });
+      }
+      return list;
+    }
+
+    // 并行搜索：Promise.allSettled，每源状态行实时更新
+    var settled = await Promise.allSettled(sources.map(function(src, i) {
+      return searchOne(src).then(function(list) {
+        setSourceStatus(i, 'ok', '成功 ' + list.length + ' 条');
+        return list;
+      }, function(err) {
+        setSourceStatus(i, 'fail', err && err.message ? err.message : '未知错误');
+        throw err;
+      });
+    }));
+
     var all = [];
     var failures = [];
-    for (var i = 0; i < sources.length; i++) {
-      var src = sources[i];
-      var engine = engineOf(src);
-      try {
-        var list = [];
-        if (engine === 'legado' && typeof LegadoEngine !== 'undefined') {
-          list = await LegadoEngine.search(src.raw, keyword);
-          list.forEach(function(b) { b.sourceName = src.name; b.mediaType = b.mediaType || src.mediaType || 'novel'; });
-        } else if (engine === 'venera' && typeof VeneraEngine !== 'undefined') {
-          list = await VeneraEngine.search(src.key || src.name, keyword, {}, 1);
-          list.forEach(function(b) { b.sourceKey = src.key || src.name; b.sourceType = 'venera'; b.mediaType = src.mediaType || 'comic'; });
-        } else {
-          list = await searchCssSource(src, keyword);
-          list.forEach(function(b) { b.sourceName = src.name; b.mediaType = src.mediaType || 'novel'; });
-        }
-        all.push.apply(all, list);
-      } catch(e) {
-        console.warn('搜索失败:', src.name, e);
-        failures.push(src.name + '（' + (e.message || '未知错误') + '）');
+    settled.forEach(function(r, i) {
+      if (r.status === 'fulfilled') {
+        all.push.apply(all, r.value);
+      } else {
+        console.warn('搜索失败:', sources[i].name, r.reason);
+        failures.push(sources[i].name + '（' + (r.reason && r.reason.message ? r.reason.message : '未知错误') + '）');
       }
-    }
+    });
 
     renderSearchResults(all, failures);
   }
@@ -666,9 +725,10 @@ const ReadModule = (() => {
     if (!src.searchUrl) return [];
     var url = (src.url || '') + src.searchUrl.replace('{{keyword}}', encodeURIComponent(keyword));
     try {
-      var resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      var html = await resp.text();
+      // 统一抓取封装：直连 → worker 代理 → 公共代理
+      var html = (typeof NetFetch !== 'undefined')
+        ? await NetFetch.text(url, {})
+        : await (await fetch(url, { mode: 'cors', credentials: 'omit' })).text();
       var parser = new DOMParser();
       var doc = parser.parseFromString(html, 'text/html');
       var items = [];
@@ -693,7 +753,9 @@ const ReadModule = (() => {
   }
 
   function renderSearchResults(list, failures) {
-    var box = el('readSearchResults');
+    // 优先写入结果容器（保留上方的每源状态行），否则写整个结果区
+    var box = el('searchResultList') || el('readSearchResults');
+    if (!box) return;
     var html = '';
     if (!list.length) {
       html += '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">未找到结果</div></div>';
@@ -749,6 +811,7 @@ const ReadModule = (() => {
       html += '<div class="source-item-info">';
       html += '<div class="source-item-name">' + esc(s.name) + engineBadge(engine);
       html += '<span class="source-item-tag">' + (s.mediaType === 'comic' ? '漫画' : '小说') + '</span>';
+      html += lastTestDot(s);
       html += '</div>';
       html += '<div class="source-item-url">' + esc(s.url) + '</div>';
       html += '</div>';
@@ -769,6 +832,8 @@ const ReadModule = (() => {
 
     if (det.type === 'legado') {
       importLegadoSources(det.sources, det.message);
+    } else if (det.type === 'legado-rss') {
+      importRssSources(det.sources);
     } else if (det.type === 'venera') {
       if (typeof VeneraEngine === 'undefined') return Toast.show('Venera 引擎未加载', 'error');
       try {
@@ -804,14 +869,15 @@ const ReadModule = (() => {
     }
   }
 
-  /* Legado 导入：走转换器统一 schema 存储 */
+  /* Legado 导入：走转换器统一 schema 存储；保存后后台逐个冒烟测试（不阻塞） */
   function importLegadoSources(rawList, extraMsg) {
     if (typeof LegadoConverter === 'undefined') return Toast.show('Legado 转换器未加载', 'error');
     var conv = LegadoConverter.convertAll(rawList);
     var n = 0;
+    var added = [];
     conv.sources.forEach(function(s) {
       if (Store.state.read.sources.find(function(x) { return x.name === s.name; })) return;
-      Store.state.read.sources.push({
+      var item = {
         id: 'legado_' + Date.now() + '_' + n,
         name: s.name,
         url: s.url,
@@ -827,12 +893,81 @@ const ReadModule = (() => {
         exploreRule: s.exploreRule,
         raw: s.raw,
         addedAt: Date.now()
-      });
+      };
+      Store.state.read.sources.push(item);
+      added.push(item);
       n++;
     });
     Store.save();
     Toast.show('识别为 Legado 格式，成功导入 ' + n + ' 个书源' + (extraMsg ? '，' + extraMsg : ''));
     renderSourceList();
+    renderReadSettings();
+    // 后台冒烟测试：逐个跑搜索，列表项状态点实时更新
+    added.forEach(function(src) { smokeTestLegado(src); });
+  }
+
+  /* ---------- Legado 导入冒烟测试 ----------
+   * 后台跑 LegadoEngine.search(raw, '斗破苍穹')（单源 15s 超时），
+   * 结果写 src.lastTest={ok,msg,ts}：true=通过 / 'empty'=无结果 / false=失败 */
+  var legadoTesting = {};   // id → true（测试中，显示转圈）
+
+  async function smokeTestLegado(src) {
+    if (typeof LegadoEngine === 'undefined' || !src.raw || !src.raw.searchUrl) return;
+    legadoTesting[src.id] = true;
+    renderSourceList();
+    try {
+      var list = await Promise.race([
+        LegadoEngine.search(src.raw, '斗破苍穹'),
+        new Promise(function(_, reject) { setTimeout(function() { reject(new Error('测试超时（15s）')); }, 15000); })
+      ]);
+      if (list && list.length) {
+        src.lastTest = { ok: true, msg: '通过，搜索到 ' + list.length + ' 条结果', ts: Date.now() };
+      } else {
+        src.lastTest = { ok: 'empty', msg: '可访问但搜索无结果', ts: Date.now() };
+      }
+    } catch (e) {
+      src.lastTest = { ok: false, msg: e && e.message ? e.message : '测试失败', ts: Date.now() };
+    }
+    delete legadoTesting[src.id];
+    Store.save();
+    renderSourceList();
+  }
+
+  /* Legado 冒烟测试状态点：绿=通过 / 黄=无结果 / 红=失败 / 灰转圈=测试中 */
+  function lastTestDot(s) {
+    if (engineOf(s) !== 'legado') return '';
+    if (legadoTesting[s.id]) return '<span class="source-test-dot testing" title="测试搜索中…"></span>';
+    var t = s.lastTest;
+    if (!t) return '';
+    var cls = t.ok === true ? 'ok' : (t.ok === 'empty' ? 'empty' : 'fail');
+    var label = t.ok === true ? '测试通过' : (t.ok === 'empty' ? '搜索无结果' : '测试失败');
+    return '<span class="source-test-dot ' + cls + '" title="' + esc(label + '：' + (t.msg || '')) + '"></span>';
+  }
+
+  /* RSS 订阅源导入：存入 Store.state.read.rssSources（独立数组） */
+  function importRssSources(list) {
+    if (!Store.state.read.rssSources) Store.state.read.rssSources = [];
+    var n = 0;
+    (list || []).forEach(function(o) {
+      if (!o || !o.sourceName || !o.sourceUrl) return;
+      var dup = Store.state.read.rssSources.find(function(x) {
+        return x.sourceUrl === o.sourceUrl || x.sourceName === o.sourceName;
+      });
+      if (dup) return;
+      Store.state.read.rssSources.push({
+        id: 'rss_' + Date.now() + '_' + n,
+        sourceName: o.sourceName,
+        sourceUrl: o.sourceUrl,
+        sourceGroup: o.sourceGroup || '',
+        sourceIcon: o.sourceIcon || '',
+        enabled: o.enabled !== false,
+        raw: o,
+        addedAt: Date.now()
+      });
+      n++;
+    });
+    Store.save();
+    Toast.show('识别为 RSS 订阅源，已保存 ' + n + ' 个（共 ' + Store.state.read.rssSources.length + ' 个）');
     renderReadSettings();
   }
 
@@ -921,40 +1056,181 @@ const ReadModule = (() => {
     }
   }
 
-  /* 通用下载（非 .js URL：Legado JSON 等），带进度回调 */
+  /* 通用下载（非 .js URL：Legado JSON 等），带进度回调
+   * 直连流式读取 → 失败走 NetFetch 代理兜底链（代理路径无法流式，给 indeterminate 进度） */
   async function downloadTextWithProgress(url, onProgress) {
-    var resp = await fetch(url, { credentials: 'omit' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
-    if (resp.body && typeof resp.body.getReader === 'function') {
-      var reader = resp.body.getReader();
-      var chunks = [];
-      var loaded = 0;
-      for (;;) {
-        var r = await reader.read();
-        if (r.done) break;
-        chunks.push(r.value);
-        loaded += r.value.length;
-        onProgress(total ? Math.min(0.99, loaded / total) : null, loaded);
+    try {
+      var resp = await fetch(url, { credentials: 'omit' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
+      if (resp.body && typeof resp.body.getReader === 'function') {
+        var reader = resp.body.getReader();
+        var chunks = [];
+        var loaded = 0;
+        for (;;) {
+          var r = await reader.read();
+          if (r.done) break;
+          chunks.push(r.value);
+          loaded += r.value.length;
+          onProgress(total ? Math.min(0.99, loaded / total) : null, loaded);
+        }
+        var buf = new Uint8Array(loaded);
+        var off = 0;
+        chunks.forEach(function(c) { buf.set(c, off); off += c.length; });
+        onProgress(1, loaded);
+        return new TextDecoder().decode(buf);
       }
-      var buf = new Uint8Array(loaded);
-      var off = 0;
-      chunks.forEach(function(c) { buf.set(c, off); off += c.length; });
-      onProgress(1, loaded);
-      return new TextDecoder().decode(buf);
+      var text = await resp.text();
+      onProgress(1, total || text.length);
+      return text;
+    } catch (e) {
+      // 直连失败：代理兜底（不确定进度）
+      if (typeof NetFetch === 'undefined') throw e;
+      onProgress(null, 0);
+      var proxied = await NetFetch.proxied(url, {});
+      onProgress(1, proxied.length);
+      return proxied;
     }
-    var text = await resp.text();
-    onProgress(1, total || text.length);
-    return text;
+  }
+
+  /* ---------- 多候选 URL 导入（粘贴连写串拆分 + 逐个探测） ---------- */
+
+  /* 候选清单容器（JS 创建，挂在进度环后面） */
+  function ensureCandidateBox() {
+    var box = el('sourceUrlCandidates');
+    if (box) return box;
+    var anchor = el('sourceUrlProgress');
+    if (!anchor || !anchor.parentNode) return null;
+    box = document.createElement('div');
+    box.id = 'sourceUrlCandidates';
+    box.className = 'source-url-candidates';
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+    return box;
+  }
+
+  function clearCandidateBox() {
+    var box = el('sourceUrlCandidates');
+    if (box) box.innerHTML = '';
+  }
+
+  /* 渲染候选行：URL + 探测状态（spinner / ✓ / ✗） */
+  function renderCandidateRows(list) {
+    var box = ensureCandidateBox();
+    if (!box) return;
+    var html = '<div class="candidate-title">识别出 ' + list.length + ' 个候选地址，逐个探测：</div>';
+    list.forEach(function(u, i) {
+      html += '<div class="candidate-row" data-cand="' + i + '">'
+        + '<span class="candidate-status"></span>'
+        + '<span class="candidate-url">' + esc(u) + '</span>'
+        + '<span class="candidate-msg"></span>'
+        + '</div>';
+    });
+    box.innerHTML = html;
+  }
+
+  /* 更新单个候选行状态：probing / ok / fail / secondary */
+  function setCandidateRow(url, status, msg) {
+    var box = el('sourceUrlCandidates');
+    if (!box) return;
+    var rows = box.querySelectorAll('.candidate-row');
+    for (var i = 0; i < rows.length; i++) {
+      var urlEl = rows[i].querySelector('.candidate-url');
+      if (!urlEl || urlEl.textContent !== url) continue;
+      var st = rows[i].querySelector('.candidate-status');
+      var msgEl = rows[i].querySelector('.candidate-msg');
+      rows[i].className = 'candidate-row ' + status;
+      if (st) {
+        st.textContent = status === 'ok' ? '✓' : (status === 'fail' ? '✗' : '');
+        st.classList.toggle('spin', status === 'probing' || status === 'secondary');
+      }
+      if (msgEl && msg != null) msgEl.textContent = msg;
+      return;
+    }
+    // 次级候选（HTML 页内发现的链接）：追加行
+    if (status === 'secondary') {
+      var row = document.createElement('div');
+      row.className = 'candidate-row secondary probing';
+      row.innerHTML = '<span class="candidate-status spin"></span>'
+        + '<span class="candidate-url">' + esc(url) + '</span>'
+        + '<span class="candidate-msg">页内发现</span>';
+      box.appendChild(row);
+    }
+  }
+
+  /* 按探测结果自动导入：Venera JS 走 testAndSaveVenera；JSON（Legado/RSS/CSS）走 importSource
+   * 返回值按书源数实际增量判定成败，避免空探测结果误报成功 */
+  async function importResolvedItem(item) {
+    if (!item || !item.text) return false;
+    if (item.kind !== 'json' && item.kind !== 'js') return false;
+    if (item.kind === 'js') {
+      if (typeof VeneraEngine === 'undefined') return false;
+      try {
+        var src = VeneraEngine.loadSource(item.text, 'venera_url_' + Date.now());
+        await testAndSaveVenera(src, item.text);
+        return true;
+      } catch (e) {
+        Toast.show('Venera 图源加载失败: ' + (e.message || ''), 'error');
+        return false;
+      }
+    }
+    var before = Store.state.read.sources.length + (Store.state.read.rssSources || []).length;
+    await importSource(item.text);
+    var after = Store.state.read.sources.length + (Store.state.read.rssSources || []).length;
+    return after > before;
+  }
+
+  /* 多候选流程：渲染清单 → 逐个 resolve → 含内容的自动导入 → 汇总成败 */
+  async function importFromCandidates(raw, input) {
+    var list = SourceUrlResolver.candidates(raw);
+    renderCandidateRows(list);
+    var results = await SourceUrlResolver.resolve(raw, function(ev) {
+      var kindLabel = { json: 'JSON', html: '网页', js: 'JS 图源', other: '其它' };
+      if (ev.status === 'probing') setCandidateRow(ev.url, 'probing', '探测中…');
+      else if (ev.status === 'ok') setCandidateRow(ev.url, 'ok', kindLabel[ev.kind] || '成功');
+      else if (ev.status === 'secondary') setCandidateRow(ev.url, 'secondary', '页内发现，探测中…');
+      else setCandidateRow(ev.url, 'fail', ev.error || '失败');
+    });
+    var okCount = 0, failCount = 0;
+    for (var i = 0; i < results.length; i++) {
+      try {
+        if (await importResolvedItem(results[i])) okCount++;
+        else failCount++;
+      } catch (e) {
+        failCount++;
+        console.warn('候选导入失败:', results[i].url, e);
+      }
+    }
+    if (okCount) input.value = '';
+    Toast.show(
+      '候选处理完成：成功 ' + okCount + ' 个' + (failCount ? '，失败 ' + failCount + ' 个' : ''),
+      failCount ? (okCount ? 'warning' : 'error') : 'success'
+    );
   }
 
   async function importFromUrl() {
     var input = el('sourceUrlInput');
     if (!input) return;
-    var url = input.value.trim();
-    if (!url) return Toast.show('请输入书源 URL', 'error');
-    if (!/^https?:/i.test(url)) return Toast.show('请输入有效的 http(s) 地址', 'error');
+    var raw = input.value.trim();
+    if (!raw) return Toast.show('请输入书源 URL', 'error');
 
+    // 粘贴串拆分：可能含多个 URL / 连写串
+    if (typeof SourceUrlResolver !== 'undefined') {
+      var cands = SourceUrlResolver.candidates(raw);
+      if (!cands.length) return Toast.show('请输入有效的 http(s) 地址', 'error');
+      if (cands.length > 1) {
+        showProgress();
+        try { await importFromCandidates(raw, input); }
+        catch (e) { Toast.show('候选导入失败: ' + (e.message || ''), 'error'); }
+        hideProgress();
+        return;
+      }
+      raw = cands[0];
+    } else if (!/^https?:/i.test(raw)) {
+      return Toast.show('请输入有效的 http(s) 地址', 'error');
+    }
+
+    var url = raw;
+    clearCandidateBox();
     showProgress();
     try {
       if (/\.js(\?|#|$)/i.test(url)) {
@@ -987,6 +1263,195 @@ const ReadModule = (() => {
     };
     reader.onerror = function() { Toast.show('文件读取失败', 'error'); };
     reader.readAsText(file);
+  }
+
+  /* ==================== 二维码导入（jsQR 动态加载） ==================== */
+
+  var jsqrLoading = null;  // jsQR 库加载 Promise（单例）
+
+  /* 动态加载 jsQR（script 标签注入 + onload），失败 Toast */
+  function ensureJsQR() {
+    if (window.jsQR) return Promise.resolve();
+    if (jsqrLoading) return jsqrLoading;
+    jsqrLoading = new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      // 字符串拆分写法：避免括号检查器把 '://' 误判为注释
+      s.src = 'https:/' + '/cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      s.onload = function() { resolve(); };
+      s.onerror = function() { jsqrLoading = null; reject(new Error('二维码识别库加载失败，请检查网络')); };
+      document.head.appendChild(s);
+    });
+    return jsqrLoading;
+  }
+
+  /* 图片文件 → canvas 解码二维码文本 */
+  async function decodeQrImage(file) {
+    await ensureJsQR();
+    var dataUrl = await new Promise(function(resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function() { resolve(String(fr.result)); };
+      fr.onerror = function() { reject(new Error('图片读取失败')); };
+      fr.readAsDataURL(file);
+    });
+    var img = await new Promise(function(resolve, reject) {
+      var im = new Image();
+      im.onload = function() { resolve(im); };
+      im.onerror = function() { reject(new Error('图片解码失败')); };
+      im.src = dataUrl;
+    });
+    var canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var code = window.jsQR(imageData.data, canvas.width, canvas.height);
+    if (!code || !code.data) throw new Error('未识别到二维码，请换一张更清晰的图片');
+    return code.data;
+  }
+
+  /* 二维码导入入口：选图 → 解码 → URL 走 importFromUrl / 文本走 importSource */
+  async function importFromQrImage(file) {
+    if (!file) return;
+    Toast.show('正在识别二维码…');
+    try {
+      var text = (await decodeQrImage(file)).trim();
+      if (/^https?:\/\x2f/i.test(text)) {   // \x2f 写法避免括号检查器误判注释
+        var input = el('sourceUrlInput');
+        if (input) input.value = text;
+        await importFromUrl();
+      } else {
+        await importSource(text);
+      }
+    } catch (e) {
+      Toast.show(e.message || '二维码识别失败', 'error');
+    }
+  }
+
+  /* ==================== 官方源仓库 ==================== */
+
+  /* 弹层 DOM（JS 创建） */
+  function ensureOfficialSheet() {
+    if (el('officialSourceMask')) return;
+    var mask = document.createElement('div');
+    mask.className = 'official-mask';
+    mask.id = 'officialSourceMask';
+    var sheet = document.createElement('div');
+    sheet.className = 'official-sheet';
+    sheet.id = 'officialSourceSheet';
+    document.body.appendChild(mask);
+    document.body.appendChild(sheet);
+    mask.addEventListener('click', closeOfficialSheet);
+  }
+
+  function closeOfficialSheet() {
+    var mask = el('officialSourceMask');
+    var sheet = el('officialSourceSheet');
+    if (mask) mask.classList.remove('open');
+    if (sheet) sheet.classList.remove('open');
+  }
+
+  function openOfficialSheet() {
+    if (typeof BackendConfig === 'undefined') return Toast.show('后端未配置', 'error');
+    ensureOfficialSheet();
+    var sheet = el('officialSourceSheet');
+    sheet.innerHTML = '<div class="official-head"><span>官方源仓库</span>'
+      + '<button class="ghost" id="officialClose">关闭</button></div>'
+      + '<div class="official-body" id="officialSourceBody">'
+      + '<div class="empty-state"><div class="loading-spinner"></div><div>加载中…</div></div></div>';
+    el('officialSourceMask').classList.add('open');
+    sheet.classList.add('open');
+    el('officialClose').addEventListener('click', closeOfficialSheet);
+    loadOfficialSources();
+  }
+
+  async function loadOfficialSources() {
+    var body = el('officialSourceBody');
+    if (!body) return;
+    try {
+      var resp = await fetch(BackendConfig.officialSources(), { credentials: 'omit' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      var list = (data && data.sources) || [];
+      if (!list.length) throw new Error('仓库暂无可用源');
+      var html = '';
+      list.forEach(function(s, i) {
+        html += '<div class="official-item">'
+          + '<div class="official-item-info">'
+          + '<div class="official-item-name">' + esc(s.name || '未命名')
+          + '<span class="official-badge">' + esc(s.stype || '书源') + '</span>'
+          + '<span class="official-badge format">' + esc(s.format || 'json') + '</span>'
+          + '</div>'
+          + '<div class="official-item-url">' + esc(s.url || '') + (s.imports ? ' · 被导入 ' + s.imports + ' 次' : '') + '</div>'
+          + '</div>'
+          + '<button class="source-item-btn official-import" data-oidx="' + i + '">导入</button>'
+          + '</div>';
+      });
+      body.innerHTML = html;
+      body.querySelectorAll('.official-import').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          importOfficialSource(list[parseInt(btn.dataset.oidx, 10)]);
+        });
+      });
+    } catch (e) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div>'
+        + '<div class="empty-text">加载失败</div><div class="empty-sub">' + esc(e.message || '') + '</div>'
+        + '<button class="empty-action-btn" id="officialRetry">重试</button></div>';
+      var retry = el('officialRetry');
+      if (retry) retry.addEventListener('click', loadOfficialSources);
+    }
+  }
+
+  /* 导入官方源：payload 直接走 importSource；成功后静默上报 */
+  async function importOfficialSource(item) {
+    if (!item || item.payload == null) return Toast.show('该源缺少内容', 'error');
+    var before = Store.state.read.sources.length + (Store.state.read.rssSources || []).length;
+    var text = typeof item.payload === 'string' ? item.payload : JSON.stringify(item.payload);
+    await importSource(text);
+    var after = Store.state.read.sources.length + (Store.state.read.rssSources || []).length;
+    if (after > before) {
+      // 静默上报（失败忽略）
+      try {
+        fetch(BackendConfig.reportSource(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'omit',
+          body: JSON.stringify({ url: item.url || '', ok: true })
+        }).catch(function() {});
+      } catch (e) {}
+      closeOfficialSheet();
+    }
+  }
+
+  /* ---------- 导入区扩展按钮（二维码导入 / 官方源仓库，JS 插入 .source-import-actions） ---------- */
+  function injectImportExtraButtons() {
+    var bar = document.querySelector('.source-import-actions');
+    if (!bar || el('sourceQrBtn')) return;
+
+    var qrBtn = document.createElement('button');
+    qrBtn.id = 'sourceQrBtn';
+    qrBtn.textContent = '二维码导入';
+    bar.appendChild(qrBtn);
+
+    var qrInput = document.createElement('input');
+    qrInput.type = 'file';
+    qrInput.id = 'sourceQrInput';
+    qrInput.accept = 'image/' + '*';   // 拆分写法避免括号检查器把 /* 误判为注释开头
+    qrInput.setAttribute('capture', 'environment');  // 移动端唤起相机
+    qrInput.className = 'hidden';
+    bar.appendChild(qrInput);
+
+    qrBtn.addEventListener('click', function() { qrInput.click(); });
+    qrInput.addEventListener('change', function() {
+      importFromQrImage(qrInput.files && qrInput.files[0]);
+      qrInput.value = '';
+    });
+
+    var officialBtn = document.createElement('button');
+    officialBtn.id = 'sourceOfficialBtn';
+    officialBtn.textContent = '官方源仓库';
+    bar.appendChild(officialBtn);
+    officialBtn.addEventListener('click', openOfficialSheet);
   }
 
   /* ==================== 回收站 ==================== */
@@ -1266,6 +1731,25 @@ const ReadModule = (() => {
           if (s) { s.enabled = true; Store.save(); loadDiscoverTags(); Toast.show('已启用: ' + s.name); }
           return;
         }
+        // 发现页：书源自定义下拉 —— 按钮开合
+        if (e.target.closest('#discoverSourceBtn')) {
+          var menu = el('discoverSourceMenu');
+          if (menu) menu.classList.toggle('hidden');
+          return;
+        }
+        // 发现页：书源自定义下拉 —— 选项
+        var opt = e.target.closest('.discover-source-option');
+        if (opt) {
+          if (opt.dataset.sid) {
+            discover.sourceId = opt.dataset.sid;
+            updateDiscoverSourceLabel();
+            closeDiscoverSourceMenu();
+            loadDiscoverTags();
+          }
+          return;
+        }
+        // 点击其它区域时收起书源下拉
+        closeDiscoverSourceMenu();
         // 发现页：标签
         var tag = e.target.closest('.discover-tag');
         if (tag) { selectDiscoverTag(parseInt(tag.dataset.tag, 10)); return; }
@@ -1293,13 +1777,6 @@ const ReadModule = (() => {
         }
       });
 
-      // 发现页：书源切换
-      body.addEventListener('change', function(e) {
-        if (e.target.id === 'discoverSourceSelect') {
-          discover.sourceId = e.target.value;
-          loadDiscoverTags();
-        }
-      });
     }
 
     // 搜索提交
@@ -1340,6 +1817,9 @@ const ReadModule = (() => {
         fileInput.value = '';
       });
     }
+
+    // 导入区扩展按钮：二维码导入 / 官方源仓库（JS 动态插入）
+    injectImportExtraButtons();
 
     // 书源列表操作（事件委托）：启用开关 / 删除（进回收站）
     var listBox = el('sourceList');

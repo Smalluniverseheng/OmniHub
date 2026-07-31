@@ -312,31 +312,39 @@ const VeneraEngine = (() => {
   async function loadSourceFromUrl(url, onProgress) {
     url = String(url || '').trim();
     if (!/^https?:/i.test(url)) throw new Error('请输入有效的 http(s) 地址');
-    const resp = await fetch(url, { credentials: 'omit' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
     let text = '';
-    if (resp.body && typeof resp.body.getReader === 'function') {
-      const reader = resp.body.getReader();
-      const chunks = [];
-      let loaded = 0;
-      for (;;) {
-        const r = await reader.read();
-        if (r.done) break;
-        chunks.push(r.value);
-        loaded += r.value.length;
-        if (typeof onProgress === 'function') {
-          try { onProgress(total ? Math.min(0.99, loaded / total) : null, loaded); } catch (e) {}
+    try {
+      const resp = await fetch(url, { credentials: 'omit' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const total = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
+      if (resp.body && typeof resp.body.getReader === 'function') {
+        const reader = resp.body.getReader();
+        const chunks = [];
+        let loaded = 0;
+        for (;;) {
+          const r = await reader.read();
+          if (r.done) break;
+          chunks.push(r.value);
+          loaded += r.value.length;
+          if (typeof onProgress === 'function') {
+            try { onProgress(total ? Math.min(0.99, loaded / total) : null, loaded); } catch (e) {}
+          }
         }
+        const buf = new Uint8Array(loaded);
+        let off = 0;
+        for (const c of chunks) { buf.set(c, off); off += c.length; }
+        text = new TextDecoder().decode(buf);
+      } else {
+        text = await resp.text();
       }
-      const buf = new Uint8Array(loaded);
-      let off = 0;
-      for (const c of chunks) { buf.set(c, off); off += c.length; }
-      text = new TextDecoder().decode(buf);
-    } else {
-      text = await resp.text();
+      if (typeof onProgress === 'function') { try { onProgress(1, total || text.length); } catch (e) {} }
+    } catch (e) {
+      // 直连失败：NetFetch 代理兜底链（代理路径无法流式，给 indeterminate 进度）
+      if (typeof NetFetch === 'undefined') throw e;
+      if (typeof onProgress === 'function') { try { onProgress(null, 0); } catch (_) {} }
+      text = await NetFetch.proxied(url, {});
+      if (typeof onProgress === 'function') { try { onProgress(1, text.length); } catch (_) {} }
     }
-    if (typeof onProgress === 'function') { try { onProgress(1, total || text.length); } catch (e) {} }
     if (!text.trim()) throw new Error('下载内容为空');
     const source = loadSource(text, 'venera_url_' + Date.now());
     source._rawText = text;   // 供调用方持久化（重启后重新加载图源用）

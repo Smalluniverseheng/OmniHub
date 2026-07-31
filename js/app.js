@@ -40,14 +40,30 @@ const App = (() => {
     // 全局事件委托 - 绑定在 document 上
     bindGlobalEvents();
 
-    // 初始化模块
-    ProfileModule.init();
-    ReadModule.init();
-    if (typeof ChatModule !== "undefined") ChatModule.init();
-    Nav.init();
+    // 语言方向初始化（dir=rtl/ltr），其余 I18n 引导在 js/i18n.js 完成
+    try {
+      var initLang = Store.state.settings.language || 'zh-CN';
+      document.documentElement.lang = initLang;
+      document.documentElement.dir = initLang === 'ar' ? 'rtl' : 'ltr';
+    } catch (e) {}
+
+    // 设备检测（幂等，device.js 也会自启一次；这里保证在模块渲染前就绪）
+    if (typeof DeviceDetector !== 'undefined') DeviceDetector.init();
+
+    // 初始化模块（错误边界：单模块失败不影响其余模块）
+    safeInitModule('我的', 'profileBody', function() { ProfileModule.init(); });
+    safeInitModule('阅读', 'readBody', function() { ReadModule.init(); });
+    if (typeof ChatModule !== "undefined") {
+      safeInitModule('对话', 'chatBody', function() { ChatModule.init(); });
+    }
+    try {
+      Nav.init();
+    } catch (e) { console.error('[App] 导航初始化失败:', e); }
 
     // 漫画阅读器事件绑定（只需一次）
-    if (typeof Reader !== "undefined" && Reader.bindEvents) Reader.bindEvents();
+    try {
+      if (typeof Reader !== "undefined" && Reader.bindEvents) Reader.bindEvents();
+    } catch (e) { console.error('[App] 阅读器事件绑定失败:', e); }
 
     // 跳转到主页
     const home = Store.state.homePage || 'profile';
@@ -69,6 +85,32 @@ const App = (() => {
     startReadProgressSync();
     purgeExpiredTrash();
     checkDisclaimer();
+  }
+
+  /* ==================== 错误边界：模块 init 失败注入降级页 ==================== */
+  function safeInitModule(name, bodyId, fn) {
+    try {
+      fn();
+    } catch (e) {
+      console.error('[App] 模块「' + name + '」初始化失败:', e);
+      injectFallback(bodyId, name);
+    }
+  }
+
+  // 降级页：模块名 + 「服务暂时不可用」+ 重试按钮（其余模块不受影响）
+  function injectFallback(bodyId, name) {
+    var body = document.getElementById(bodyId);
+    if (!body) return;
+    body.innerHTML =
+      '<div class="module-fallback">' +
+      '<div class="module-fallback-icon"><span data-icon="alert"></span></div>' +
+      '<div class="module-fallback-title">' + escapeHtml(name) + '</div>' +
+      '<div class="module-fallback-desc">服务暂时不可用</div>' +
+      '<button type="button" class="module-fallback-btn">重试</button>' +
+      '</div>';
+    var btn = body.querySelector('.module-fallback-btn');
+    if (btn) btn.addEventListener('click', function() { location.reload(); });
+    if (typeof Icons !== 'undefined') Icons.render(body);
   }
 
   // 回收站 15 天过期自动清除（启动时做一次；阅读/对话各一份）
@@ -199,11 +241,74 @@ const App = (() => {
   }
 
   function switchPage(pageId) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById('page-' + pageId);
-    if (target) target.classList.add('active');
+    if (!target) return;
+    const oldPage = document.querySelector('.page.active');
     currentPage = pageId;
     Nav.updateActive(pageId);
+    // 广播页面切换（桌面侧边栏高亮/顶栏标题等订阅此事件）
+    if (typeof EventBus !== 'undefined') EventBus.emit('page:changed', { page: pageId });
+
+    if (!oldPage || oldPage === target) {
+      switchToken++;  // 作废旧动画的延迟收尾，避免误删 active
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      target.classList.add('active');
+      cleanupSwitchAnim();
+      return;
+    }
+    animateSwitch(oldPage, target);
+  }
+
+  /* ---- 10.1 页面切换动效：旧页 1→0 + 0→-30px（200ms），新页 30→0 + 0→1（250ms 错开 50ms）---- */
+  var switchToken = 0;   // 动画令牌：快速连切时作废旧动画的收尾
+
+  function animateSwitch(oldPage, target) {
+    var token = ++switchToken;
+    var rtl = document.documentElement.dir === 'rtl';  // RTL 方向反转
+    var outX = rtl ? 30 : -30;
+    var inX = rtl ? -30 : 30;
+
+    // 双页 position:absolute 叠加，避免高度差导致跳动
+    oldPage.style.transition = 'none';
+    oldPage.style.opacity = '1';
+    oldPage.style.transform = 'translateX(0)';
+    target.classList.add('active');
+    target.style.transition = 'none';
+    target.style.opacity = '0';
+    target.style.transform = 'translateX(' + inX + 'px)';
+
+    requestAnimationFrame(function() {
+      if (token !== switchToken) return;
+      oldPage.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+      oldPage.style.opacity = '0';
+      oldPage.style.transform = 'translateX(' + outX + 'px)';
+      setTimeout(function() {
+        if (token !== switchToken) return;
+        target.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+        target.style.opacity = '1';
+        target.style.transform = 'translateX(0)';
+      }, 50);
+    });
+
+    // 动画完清理：旧页退场、内联样式复位
+    setTimeout(function() {
+      if (token !== switchToken) return;
+      cleanupSwitchAnim(oldPage, target);
+    }, 320);
+  }
+
+  function cleanupSwitchAnim(oldPage, target) {
+    if (oldPage) {
+      oldPage.classList.remove('active');
+      oldPage.style.transition = '';
+      oldPage.style.opacity = '';
+      oldPage.style.transform = '';
+    }
+    if (target) {
+      target.style.transition = '';
+      target.style.opacity = '';
+      target.style.transform = '';
+    }
   }
 
   // 子页面导航堆栈：打开新子页面时隐藏当前子页面，返回时逐级回退
@@ -220,23 +325,51 @@ const App = (() => {
     }
     sub.classList.add('open');
     document.body.style.overflow = 'hidden';
+    // 浏览器后退可关闭子页面：压入一条历史记录，popstate 时消费
+    try { history.pushState({ omnihubSub: subId }, ''); } catch (e) {}
+    // 直接渲染一次图标（MutationObserver 兜底之外的稳态保障）
+    if (typeof Icons !== 'undefined') Icons.render(sub);
     // 打开时触发目标子页面的渲染钩子（若模块定义了的话）
     var hook = 'render:' + subId;
     try { document.dispatchEvent(new CustomEvent(hook)); } catch (e) {}
   }
 
   function closeSub() {
+    // 若历史栈顶是子页面压入的记录，走 history.back()，由 popstate 统一执行关闭，
+    // 避免这里关闭一次、popstate 又关一次的重复回退
+    try {
+      if (history.state && history.state.omnihubSub && document.querySelector('.subpage.open')) {
+        history.back();
+        return;
+      }
+    } catch (e) {}
+    doCloseSub();
+  }
+
+  // 真正执行关闭（popstate 触发或历史栈对不上时的直关路径）
+  function doCloseSub() {
     const current = document.querySelector('.subpage.open');
     if (current) current.classList.remove('open');
     const prevId = subStack.pop();
     const prev = prevId && document.getElementById(prevId);
     if (prev) {
       prev.classList.add('open');
+      if (typeof Icons !== 'undefined') Icons.render(prev);
     } else {
       subStack.length = 0;
       document.body.style.overflow = '';
     }
   }
+
+  // 浏览器后退：关闭当前子页面（无打开子页面时不干预默认行为）
+  window.addEventListener('popstate', function() {
+    if (document.querySelector('.subpage.open')) doCloseSub();
+  });
+
+  // Esc 关闭当前子页面（桌面端 13.3）
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.querySelector('.subpage.open')) closeSub();
+  });
 
   function bindGlobalEvents() {
     // 事件委托 - 所有点击走这里

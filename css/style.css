@@ -785,7 +785,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .source-url-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .source-url-row input { flex: 1; padding: 10px 14px; border-radius: var(--radius); background: var(--bg-card); border: 1px solid var(--border); color: var(--text); font-size: 14px; outline: none; }
 .source-url-row input:focus { border-color: var(--accent); }
-.source-url-row button { padding: 10px 16px; border-radius: var(--radius); background: var(--accent); border: none; color: #fff; font-size: 14px; cursor: pointer; font-weight: 500; }
+.source-url-row button { width: auto; flex-shrink: 0; padding: 10px 16px; border-radius: var(--radius); background: var(--accent); border: none; color: #fff; font-size: 14px; cursor: pointer; font-weight: 500; }
 .source-url-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--text-2); font-size: 13px; }
 .progress-ring { width: 32px; height: 32px; transform: rotate(-90deg); }
 .progress-ring.indeterminate { animation: ringSpin 1s linear infinite; }

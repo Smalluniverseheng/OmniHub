@@ -1,0 +1,133 @@
+/* ==================== OmniHub global.css - 全局架构层样式（v8.2 新增） ==================== */
+/* 本文件承载：图标宿主 / 桌面端侧边栏+顶栏 / 手表端适配 / 涟漪 / Toast / 黑夜模式补强 / 模块降级页 / 悬浮球增强。
+   加载顺序必须在 css/style.css 之后（同名选择器覆盖生效）。 */
+
+/* ==================== 1. 内联 SVG 图标宿主 ==================== */
+.oh-icon-host { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.oh-icon { width: 20px; height: 20px; flex-shrink: 0; }
+.subpage-header .oh-icon, .page-actions .oh-icon { width: 22px; height: 22px; }
+
+/* ==================== 2. 桌面端布局（侧边栏 280px + 顶部工具栏） ==================== */
+#desktopSidebar { display: none; position: fixed; left: 0; top: 0; bottom: 0; width: 280px; flex-direction: column; background: var(--bg-elev); border-right: 1px solid var(--border); z-index: 900; }
+body.device-desktop #desktopSidebar { display: flex; }
+.ds-brand { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.ds-brand img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
+.ds-brand-name { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+.ds-nav { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.ds-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; cursor: pointer; color: var(--text-2); transition: background 0.15s, color 0.15s; user-select: none; }
+.ds-item:hover { background: var(--accent-soft); color: var(--text); }
+.ds-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.ds-icon { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; }
+.ds-icon .oh-icon { width: 22px; height: 22px; }
+.ds-emoji { font-size: 18px; line-height: 1; }
+.ds-name { font-size: 14px; }
+
+#desktopTopbar { display: none; position: fixed; top: 0; left: 280px; right: 0; height: 56px; align-items: center; justify-content: space-between; padding: 0 20px; background: var(--bg-elev); border-bottom: 1px solid var(--border); z-index: 890; }
+body.device-desktop #desktopTopbar { display: flex; }
+.dt-title { font-size: 17px; font-weight: 600; }
+.dt-actions { display: flex; gap: 8px; align-items: center; }
+.dt-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; border: none; background: transparent; color: var(--text-2); cursor: pointer; transition: background 0.15s, color 0.15s; }
+.dt-btn:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* 主内容区让位侧边栏与顶栏 */
+body.device-desktop #app { margin-left: 280px; width: calc(100% - 280px); padding-top: 56px; }
+/* 桌面端隐藏悬浮球导航 */
+body.device-desktop #fabNav, body.desktop #fabNav { display: none !important; }
+
+/* RTL：侧边栏翻到右侧 */
+html[dir="rtl"] body.device-desktop #desktopSidebar { left: auto; right: 0; border-right: none; border-left: 1px solid var(--border); }
+html[dir="rtl"] body.device-desktop #desktopTopbar { left: 0; right: 280px; }
+html[dir="rtl"] body.device-desktop #app { margin-left: 0; margin-right: 280px; }
+
+/* ==================== 3. 手表端适配（<360px 单栏 / 44×44 触摸目标 / 文字精简） ==================== */
+@media (max-width: 359px) {
+  body { font-size: 13px; }
+  .page-body { padding: 10px; }
+  .page-header { padding: 10px 12px; }
+  .page-title { font-size: 16px; }
+  /* 单栏：多列网格一律收成单列/双列 */
+  .fab-page { grid-template-columns: repeat(2, 1fr); gap: 12px 8px; }
+  .reader-mode-grid { grid-template-columns: 1fr !important; }
+  /* 最小 44×44 触摸目标 */
+  button, .icon-btn, .read-nav-item, .source-tab, .back-btn, .toggle-switch, .settings-row { min-width: 44px; min-height: 44px; }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; }
+  /* 文字精简 */
+  .fab-module-icon { width: 52px; height: 52px; font-size: 22px; }
+  .fab-module-name { font-size: 11px; }
+  .fab-menu { width: 232px; padding: 18px 12px 12px; }
+  .read-nav-label { font-size: 10px; }
+  .settings-row { padding-top: 8px; padding-bottom: 8px; }
+  .toast { font-size: 12px; }
+}
+/* 类驱动兜底（UA 含 Watch 但宽度 ≥360 的极端情况） */
+body.device-watch .fab-page { grid-template-columns: repeat(2, 1fr); }
+body.device-watch button, body.device-watch .icon-btn, body.device-watch .read-nav-item { min-width: 44px; min-height: 44px; }
+
+/* ==================== 4. 全局涟漪 ==================== */
+.oh-ripple-host { overflow: hidden; }
+.oh-ripple-rel { position: relative; }
+.oh-ripple { position: absolute; border-radius: 50%; background: currentColor; opacity: 0.3; transform: scale(0); animation: ohRipple 0.4s ease-out forwards; pointer-events: none; z-index: 1; }
+@keyframes ohRipple { to { transform: scale(4); opacity: 0; } }
+
+/* ==================== 5. Toast：底部滑出 + 顶部横幅 ==================== */
+.toast-container { top: auto !important; bottom: 24px; }
+.toast { animation: none !important; opacity: 0; transform: translateY(100%); transition: opacity 0.3s ease, transform 0.3s ease; }
+.toast.show { opacity: 1; transform: translateY(0); }
+
+.toast-banner { position: fixed; top: 0; left: 50%; transform: translate(-50%, -100%); min-width: 260px; max-width: 90vw; background: var(--bg-elev); border: 1px solid var(--border); border-top: none; border-radius: 0 0 14px 14px; box-shadow: var(--shadow); z-index: 4000; transition: transform 0.3s ease; overflow: hidden; cursor: pointer; }
+.toast-banner.show { transform: translate(-50%, 0); }
+.toast-banner-text { padding: 12px 20px; font-size: 14px; color: var(--text); }
+.toast-banner-bar { height: 3px; background: var(--accent); width: 100%; animation: ohBannerBar 5s linear forwards; }
+@keyframes ohBannerBar { from { width: 100%; } to { width: 0%; } }
+
+/* ==================== 6. 黑夜模式补强 ==================== */
+html.dark button:hover, html.dark .icon-btn:hover, html.dark .back-btn:hover { filter: brightness(1.1); }
+html.dark input:hover, html.dark textarea:hover, html.dark select:hover { filter: brightness(1.1); }
+/* 空状态/占位符：低对比白 + 脉冲 */
+@keyframes ohEmptyPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
+html.dark .empty-icon, html.dark .empty-state .oh-icon, html.dark [class*="empty"] .oh-icon,
+html.dark .placeholder-icon { color: rgba(255, 255, 255, 0.2); animation: ohEmptyPulse 2s ease-in-out infinite; }
+
+/* ==================== 7. 模块降级页（错误边界） ==================== */
+.module-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 48px 24px; text-align: center; color: var(--text-2); min-height: 40vh; }
+.module-fallback-icon { color: var(--text-3); }
+.module-fallback-icon .oh-icon { width: 40px; height: 40px; }
+.module-fallback-title { font-size: 16px; font-weight: 600; color: var(--text); }
+.module-fallback-desc { font-size: 13px; }
+.module-fallback-btn { padding: 10px 28px; border-radius: 20px; background: var(--accent); color: #fff; border: none; font-size: 14px; cursor: pointer; }
+
+/* ==================== 8. 悬浮球增强（拖拽态 / 扇形模式） ==================== */
+.fab-trigger.fab-dragging { transform: scale(1.1) !important; box-shadow: 0 8px 32px rgba(99, 102, 241, 0.65) !important; }
+
+/* 扇形模式：菜单面板透明化，菜单项绕悬浮球呈 120° 弧分布 */
+.fab-menu.fan-mode { background: transparent; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; width: 0; height: 0; overflow: visible; transform: none; }
+.fab-menu.fan-mode.open { transform: none; }
+.fab-menu.fan-mode .fab-menu-viewport { overflow: visible; width: 0; height: 0; }
+.fab-menu.fan-mode .fab-menu-pages { display: block; width: 0; height: 0; transform: none !important; }
+.fab-menu.fan-mode .fab-menu-dots { display: none !important; }
+.fab-fan-item { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; transform: translate(-50%, -50%) scale(0); transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 2; }
+.fab-fan-item.open { transform: translate(-50%, -50%) scale(1); }
+.fab-fan-item.active .fab-module-icon { box-shadow: 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.fab-fan-item .fab-module-icon { width: 52px; height: 52px; font-size: 24px; }
+.fab-fan-item .fab-module-name { font-size: 12px; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); white-space: nowrap; }
+/* 扇形模式编辑态：删除角标 / 抖动 / 移除动画（style.css 只覆盖 .fab-module-item） */
+.fab-fan-item .delete-badge { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; background: var(--danger); color: #fff; border-radius: 50%; font-size: 12px; display: flex; align-items: center; justify-content: center; transform: scale(0); transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 3; }
+.fab-fan-item.editing .delete-badge { transform: scale(1); }
+.fab-fan-item.editing { animation: shake 0.3s infinite; }
+.fab-fan-item.removing { transform: translate(-50%, -50%) scale(0) !important; }
+
+/* 键盘弹起时底部落差由 JS 内联处理；这里保证遮罩层级稳定 */
+body.kb-open .fab-menu { max-height: 60vh; }
+
+/* ===== 桌面端层级协调（v8.2 集成修复）：侧栏 z900 / 顶栏 z890，浮层必须高于它们 ===== */
+.subpage { z-index: 950; }
+.chat-modes-layer { z-index: 960; }
+.mcp-layer { z-index: 970; }
+.chat-history-menu-layer { z-index: 980; }
+.mp-overlay { z-index: 990; }
+
+/* ===== 桌面端顶栏接管页头（v8.2 集成修复） ===== */
+body.device-desktop #app { padding-top: 56px; }
+body.device-desktop #app > .page > .page-header { display: none; }
+.official-mask { z-index: 995; }
+.official-sheet { z-index: 996; }

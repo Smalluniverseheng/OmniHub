@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>OmniHub e2e 引擎验收台</title>
+<style>
+  body { background:#0a0a0a; color:#eee; font:13px/1.6 monospace; padding:16px; }
+  .step { margin:6px 0; padding:8px 12px; border-left:3px solid #444; }
+  .ok { border-color:#22c55e; } .fail { border-color:#ef4444; } .run { border-color:#eab308; }
+  #verdict { font-size:20px; font-weight:700; padding:12px; margin-top:10px; }
+  #verdict.pass { color:#22c55e; } #verdict.fail { color:#ef4444; }
+  pre { white-space:pre-wrap; word-break:break-all; color:#aaa; margin:4px 0; }
+</style>
+</head>
+<body>
+<h2>OmniHub e2e 引擎验收台（verifier/v3）</h2>
+<div id="log"></div>
+<div id="verdict">RUNNING</div>
+<pre id="detail"></pre>
+
+<script src="/js/providers.js"></script>
+<script src="/js/backend-config.js"></script>
+<script src="/js/legado-engine.js"></script>
+<script src="/js/source-url-resolver.js"></script>
+<script src="/js/legado-converter.js"></script>
+<script src="/js/source-detect.js"></script>
+<script>
+(function() {
+  var logEl = document.getElementById('log');
+  var fails = 0;
+  function step(name, ok, info) {
+    var d = document.createElement('div');
+    d.className = 'step ' + (ok === null ? 'run' : ok ? 'ok' : 'fail');
+    d.textContent = (ok === null ? '◌ ' : ok ? '✓ ' : '✗ ') + name + (info ? ' — ' + info : '');
+    logEl.appendChild(d);
+    if (ok === false) fails++;
+  }
+  var ACCEPT = 'https://www.yckceo.com/yuedu/rsshttps://www.spmxxqq.com:2087/1035.htmls/json/id/193.json';
+
+  async function main() {
+    /* 1) 拆分验收串 */
+    var parts = SourceUrlResolver.split(ACCEPT);
+    step('split 验收串', parts.length >= 2, parts.length + ' 个 URL: ' + parts.join(' | '));
+
+    /* 2) 候选扩展包含两个 yckceo JSON */
+    var cands = SourceUrlResolver.candidates(ACCEPT);
+    var urls = cands.map(function(c){ return c.url || c; });
+    var hasBook = urls.some(function(u){ return u.indexOf('shuyuan/json/id/193.json') > -1; });
+    var hasRss = urls.some(function(u){ return u.indexOf('rss/json/id/193.json') > -1; });
+    step('候选含 shuyuan/rss 两个 id/193 JSON', hasBook && hasRss, urls.length + ' 候选');
+
+    /* 3) resolve 联网探测（经 NetFetch 三级回退） */
+    var got = [];
+    try {
+      var resolved = await SourceUrlResolver.resolve(ACCEPT, function() {});
+      got = resolved.filter(function(r){ return r && r.text; });
+      step('resolve 联网取回内容', got.length >= 1, got.length + ' 个候选有内容');
+    } catch (e) {
+      step('resolve 联网取回内容', false, e.message);
+    }
+
+    /* 4) SourceDetect 判型纵横 JSON */
+    var zhText = null;
+    for (var i = 0; i < got.length; i++) {
+      if (got[i].text.indexOf('纵横中文网') > -1) { zhText = got[i].text; break; }
+    }
+    if (!zhText) {
+      /* 直接经代理兜底再取一次 */
+      try { zhText = await NetFetch.text('https://www.yckceo.com/yuedu/shuyuan/json/id/193.json'); } catch (e) {}
+    }
+    var det = zhText ? await SourceDetect.detect(zhText) : null;
+    step('纵横 JSON 判型 legado', !!(det && det.type === 'legado' && det.sources.length), det ? (det.type + ' ×' + det.sources.length) : '未取到');
+
+    /* 5) 精华书阁手机版（Neon 播种的实测可用源）经 worker 官方源接口取得并搜索 */
+    var official = null;
+    try {
+      var r = await fetch(BackendConfig.officialSources(), { credentials: 'omit' });
+      var data = await r.json();
+      official = (data.sources || []).filter(function(s){ return s.name.indexOf('精华书阁') > -1; })[0];
+      step('官方源仓库返回精华书阁', !!official, official ? official.name : (data.sources||[]).length + ' 条');
+    } catch (e) { step('官方源仓库返回精华书阁', false, e.message); }
+
+    var searchSrc = null;
+    if (official && official.payload) {
+      searchSrc = official.payload;
+    }
+    if (searchSrc) {
+      try {
+        var list = await LegadoEngine.search(searchSrc, '斗破苍穹');
+        step('精华书阁搜索 斗破苍穹', list.length > 0, list.length + ' 条；首条: ' + (list[0] ? list[0].name + ' / ' + list[0].author + ' / ' + list[0].url : '无'));
+        /* 6) 目录 + 正文延伸验证 */
+        if (list.length) {
+          try {
+            var toc = await LegadoEngine.getToc(searchSrc, { url: list[0].url, tocUrl: '' });
+            step('首条结果目录加载', toc.length > 0, toc.length + ' 章；首章: ' + (toc[0] ? toc[0].name : ''));
+            if (toc.length && toc[0].url) {
+              var content = await LegadoEngine.getContent(searchSrc, toc[0]);
+              var txt = content && content.text ? content.text : '';
+              step('首章正文获取', txt.length > 100, txt.length + ' 字；开头: ' + txt.slice(0, 60));
+            }
+          } catch (e2) { step('目录/正文延伸验证', false, e2.message); }
+        }
+      } catch (e) { step('精华书阁搜索 斗破苍穹', false, e.message); }
+    }
+
+    /* 7) 纵横源搜索（已知上游改为JS渲染，预期 0 条但请求必须成功） */
+    if (det && det.sources.length) {
+      try {
+        var zlist = await LegadoEngine.search(det.sources[0], '斗破苍穹');
+        step('纵横源搜索请求成功（上游JS渲染允许0条）', true, zlist.length + ' 条');
+      } catch (e) {
+        step('纵横源搜索请求成功', false, e.message);
+      }
+    }
+
+    var v = document.getElementById('verdict');
+    v.textContent = fails === 0 ? 'E2E PASS' : 'E2E FAIL (' + fails + ')';
+    v.className = fails === 0 ? 'pass' : 'fail';
+    document.title = v.textContent;
+  }
+  main().catch(function(e) {
+    step('主流程异常', false, e.message);
+    var v = document.getElementById('verdict');
+    v.textContent = 'E2E FAIL (exception)';
+    v.className = 'fail';
+    document.title = v.textContent;
+  });
+})();
+</script>
+</body>
+</html>

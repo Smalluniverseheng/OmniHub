@@ -1,0 +1,329 @@
+/* ==================== OmniHub Profile/Auth 样式（v8.2 新增） ====================
+ * 覆盖范围：二级密码弹窗（.auth2-*）、设备管理页（.device-*）、
+ * 云同步 diff 确认弹层（.syncdiff-*）、按钮内联旋转 SVG（.spin-svg）、
+ * 存储进度条渐变、RTL 微调。
+ * 复用 style.css 的 CSS 变量（--bg-card/--accent/--danger/--border 等）。
+ */
+
+/* ---------- 通用：按钮内联旋转 SVG（卡密激活等加载态） ---------- */
+@keyframes auth2Spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin-svg {
+  display: inline-block;
+  vertical-align: middle;
+  animation: auth2Spin 0.8s linear infinite;
+}
+
+/* ---------- 二级密码弹窗 ---------- */
+.auth2-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.auth2-mask.open { opacity: 1; }
+
+.auth2-sheet {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -46%) scale(0.96);
+  width: min(88vw, 360px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  z-index: 10001;
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.auth2-sheet.open {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.auth2-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.auth2-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+  margin-bottom: 14px;
+}
+
+.auth2-field {
+  position: relative;
+  margin-bottom: 10px;
+}
+.auth2-input {
+  width: 100%;
+  padding: 11px 40px 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.auth2-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.auth2-input.error {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+/* 错误红框抖动 */
+@keyframes auth2Shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.auth2-input.shake { animation: auth2Shake 0.4s; }
+
+.auth2-eye {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  inset-inline-end: 8px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+.auth2-eye:active { background: var(--accent-soft); color: var(--accent-light); }
+
+.auth2-error {
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--danger);
+  margin: 2px 0 8px;
+}
+
+.auth2-actions {
+  display: flex;
+  gap: 10px;
+}
+.auth2-btn {
+  flex: 1;
+  padding: 11px 0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: transform 0.15s, opacity 0.15s;
+}
+.auth2-btn:active { transform: scale(0.97); }
+.auth2-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.auth2-btn.primary:active { opacity: 0.85; }
+.auth2-btn.ghost {
+  background: transparent;
+  color: var(--text-2);
+}
+
+/* ---------- 设备管理页 ---------- */
+.device-tip {
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.device-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.device-item:last-child { border-bottom: none; }
+.device-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.device-info { flex: 1; min-width: 0; }
+.device-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.device-meta {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.device-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.device-dot.online {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+.device-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-light);
+}
+.device-shield { color: #f59e0b; font-size: 13px; }
+.device-kick {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.device-kick:active { background: rgba(239, 68, 68, 0.12); }
+
+/* ---------- 云同步 diff 确认弹层（底部滑出） ---------- */
+.syncdiff-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.syncdiff-mask.open { opacity: 1; }
+
+.syncdiff-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-card);
+  border-radius: 18px 18px 0 0;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 10001;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.syncdiff-sheet.open { transform: translateY(0); }
+
+.syncdiff-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.syncdiff-sub {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-bottom: 14px;
+}
+.syncdiff-group {
+  background: var(--bg-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.syncdiff-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.syncdiff-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-2);
+  padding: 3px 0;
+}
+.syncdiff-stat b { color: var(--text); font-weight: 500; }
+.syncdiff-stat .up { color: #22c55e; }
+.syncdiff-stat .chg { color: #f59e0b; }
+.syncdiff-stat .del { color: var(--danger); }
+
+.syncdiff-progress {
+  margin: 12px 0 4px;
+}
+.syncdiff-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-soft);
+  overflow: hidden;
+}
+.syncdiff-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  transition: width 0.25s ease;
+}
+.syncdiff-progress-text {
+  font-size: 12px;
+  color: var(--text-2);
+  text-align: center;
+  margin-top: 6px;
+}
+
+.syncdiff-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* ---------- 存储空间进度条渐变色（覆盖 style.css 原纯色） ---------- */
+.storage-bar-fill {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899) !important;
+}
+
+/* ---------- RTL 微调 ---------- */
+[dir="rtl"] .icon-chevron { transform: scaleX(-1); }
+[dir="rtl"] .device-item,
+[dir="rtl"] .device-name,
+[dir="rtl"] .device-meta { direction: rtl; }

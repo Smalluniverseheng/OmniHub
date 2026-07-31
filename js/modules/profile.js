@@ -1,127 +1,172 @@
 /* ==================== OmniHub Profile Module ==================== */
 
-const I18n = {
-  lang: 'zh',
-  data: {
-    zh: {
-      my: '我的', memberCenter: '会员中心', cloudSync: '云同步', modules: '模块',
-      moduleManage: '模块管理', homePage: '默认主页', data: '数据', dataManage: '数据管理',
-      clearCache: '清除缓存', settings: '设置', globalSettings: '全局设置', about: '关于',
-      login: '登录', register: '注册', logout: '退出登录', username: '用户名',
-      password: '密码', notLogged: '未登录', loginToSync: '登录后同步数据',
-      loggedIn: '已登录', exportData: '导出数据', importData: '导入数据', resetData: '重置所有数据',
-      theme: '主题', dark: '深色', light: '浅色', followSystem: '跟随系统',
-      language: '语言', fabSnap: '悬浮球吸附边缘', notifications: '通知',
-      reading: '阅读', chat: '对话', novelAndComic: '小说与漫画', aiChat: 'AI聊天',
-      enabled: '个已开启', selectHomePage: '选择默认主页', saved: '已保存',
-      cacheCleared: '缓存已清除', dataExported: '数据已导出', dataImported: '数据导入成功',
-      dataReset: '数据已重置', confirmReset: '确定重置所有数据？此操作不可恢复！',
-      confirmClear: '确定清除所有缓存？书架、书源等数据不会被删除。',
-      confirmLogout: '确定退出登录？', loginSuccess: '登录成功', logoutSuccess: '已退出登录',
-      fillAll: '请填写用户名和密码', invalidData: '数据格式错误', developing: '开发中',
-      account: '账号', disclaimer: '免责声明', trash: '回收站'
-    },
-    en: {
-      my: 'Profile', memberCenter: 'Member Center', cloudSync: 'Cloud Sync', modules: 'Modules',
-      moduleManage: 'Module Manager', homePage: 'Home Page', data: 'Data', dataManage: 'Data Manager',
-      clearCache: 'Clear Cache', settings: 'Settings', globalSettings: 'Global Settings', about: 'About',
-      login: 'Login', register: 'Register', logout: 'Logout', username: 'Username',
-      password: 'Password', notLogged: 'Not logged in', loginToSync: 'Login to sync data',
-      loggedIn: 'Logged in', exportData: 'Export Data', importData: 'Import Data', resetData: 'Reset All Data',
-      theme: 'Theme', dark: 'Dark', light: 'Light', followSystem: 'Follow System',
-      language: 'Language', fabSnap: 'FAB Snap to Edge', notifications: 'Notifications',
-      reading: 'Reading', chat: 'Chat', novelAndComic: 'Novel & Comic', aiChat: 'AI Chat',
-      enabled: ' enabled', selectHomePage: 'Select Home Page', saved: 'Saved',
-      cacheCleared: 'Cache cleared', dataExported: 'Data exported', dataImported: 'Data imported',
-      dataReset: 'Data reset', confirmReset: 'Reset all data? This cannot be undone!',
-      confirmClear: 'Clear cache? Bookshelf and sources will not be deleted.',
-      confirmLogout: 'Logout?', loginSuccess: 'Login successful', logoutSuccess: 'Logged out',
-      fillAll: 'Please fill in username and password', invalidData: 'Invalid data format', developing: 'Developing',
-      account: 'Account', disclaimer: 'Disclaimer', trash: 'Trash'
-    },
-    fr: {
-      my: 'Profil', memberCenter: 'Centre Membre', cloudSync: 'Sync Cloud', modules: 'Modules',
-      moduleManage: 'Gestion Modules', homePage: "Page d'accueil", data: 'Données', dataManage: 'Gestion Données',
-      clearCache: 'Vider Cache', settings: 'Paramètres', globalSettings: 'Paramètres Globaux', about: 'À propos',
-      login: 'Connexion', register: 'Inscription', logout: 'Déconnexion', username: "Nom d'utilisateur",
-      password: 'Mot de passe', notLogged: 'Non connecté', loginToSync: 'Connectez-vous pour synchroniser',
-      loggedIn: 'Connecté', exportData: 'Exporter', importData: 'Importer', resetData: 'Réinitialiser',
-      theme: 'Thème', dark: 'Sombre', light: 'Clair', followSystem: 'Suivre système',
-      language: 'Langue', fabSnap: 'FAB adhérence bord', notifications: 'Notifications',
-      reading: 'Lecture', chat: 'Chat', novelAndComic: 'Roman & BD', aiChat: 'Chat IA',
-      enabled: ' activé', selectHomePage: "Choisir page d'accueil", saved: 'Enregistré',
-      cacheCleared: 'Cache vidé', dataExported: 'Données exportées', dataImported: 'Données importées',
-      dataReset: 'Données réinitialisées', confirmReset: 'Réinitialiser? Irréversible!',
-      confirmClear: 'Vider cache? Bibliothèque conservée.', confirmLogout: 'Déconnexion?',
-      loginSuccess: 'Connecté', logoutSuccess: 'Déconnecté', fillAll: 'Remplir tous les champs',
-      invalidData: 'Format invalide', developing: 'En développement',
-      account: 'Compte', disclaimer: 'Avertissement', trash: 'Corbeille'
-    },
-    ru: {
-      my: 'Профиль', memberCenter: 'Центр участника', cloudSync: 'Облачная синхронизация', modules: 'Модули',
-      moduleManage: 'Управление модулями', homePage: 'Главная страница', data: 'Данные', dataManage: 'Управление данными',
-      clearCache: 'Очистить кэш', settings: 'Настройки', globalSettings: 'Глобальные настройки', about: 'О приложении',
-      login: 'Вход', register: 'Регистрация', logout: 'Выход', username: 'Имя пользователя',
-      password: 'Пароль', notLogged: 'Не авторизован', loginToSync: 'Войдите для синхронизации',
-      loggedIn: 'Авторизован', exportData: 'Экспорт', importData: 'Импорт', resetData: 'Сбросить все',
-      theme: 'Тема', dark: 'Тёмная', light: 'Светлая', followSystem: 'Как в системе',
-      language: 'Язык', fabSnap: 'FAB прилипание к краю', notifications: 'Уведомления',
-      reading: 'Чтение', chat: 'Чат', novelAndComic: 'Роман и комикс', aiChat: 'ИИ-чат',
-      enabled: ' включено', selectHomePage: 'Выбрать главную', saved: 'Сохранено',
-      cacheCleared: 'Кэш очищен', dataExported: 'Данные экспортированы', dataImported: 'Данные импортированы',
-      dataReset: 'Данные сброшены', confirmReset: 'Сбросить все данные? Необратимо!',
-      confirmClear: 'Очистить кэш? Книги сохранятся.', confirmLogout: 'Выйти?',
-      loginSuccess: 'Вход выполнен', logoutSuccess: 'Выход выполнен', fillAll: 'Заполните все поля',
-      invalidData: 'Неверный формат', developing: 'В разработке',
-      account: 'Аккаунт', disclaimer: 'Отказ от ответственности', trash: 'Корзина'
-    },
-    es: {
-      my: 'Perfil', memberCenter: 'Centro Miembro', cloudSync: 'Sync Nube', modules: 'Módulos',
-      moduleManage: 'Gestión Módulos', homePage: 'Página Inicio', data: 'Datos', dataManage: 'Gestión Datos',
-      clearCache: 'Borrar Caché', settings: 'Ajustes', globalSettings: 'Ajustes Globales', about: 'Acerca de',
-      login: 'Iniciar sesión', register: 'Registrarse', logout: 'Cerrar sesión', username: 'Usuario',
-      password: 'Contraseña', notLogged: 'No conectado', loginToSync: 'Inicie sesión para sincronizar',
-      loggedIn: 'Conectado', exportData: 'Exportar', importData: 'Importar', resetData: 'Restablecer todo',
-      theme: 'Tema', dark: 'Oscuro', light: 'Claro', followSystem: 'Seguir sistema',
-      language: 'Idioma', fabSnap: 'FAB adherir borde', notifications: 'Notificaciones',
-      reading: 'Lectura', chat: 'Chat', novelAndComic: 'Novela y Cómic', aiChat: 'Chat IA',
-      enabled: ' habilitado', selectHomePage: 'Elegir página inicio', saved: 'Guardado',
-      cacheCleared: 'Caché borrado', dataExported: 'Datos exportados', dataImported: 'Datos importados',
-      dataReset: 'Datos restablecidos', confirmReset: '¿Restablecer todo? ¡Irreversible!',
-      confirmClear: '¿Borrar caché? Biblioteca conservada.', confirmLogout: '¿Cerrar sesión?',
-      loginSuccess: 'Sesión iniciada', logoutSuccess: 'Sesión cerrada', fillAll: 'Complete todos los campos',
-      invalidData: 'Formato inválido', developing: 'En desarrollo',
-      account: 'Cuenta', disclaimer: 'Aviso legal', trash: 'Papelera'
-    },
-    ar: {
-      my: 'الملف الشخصي', memberCenter: 'مركز العضو', cloudSync: 'مزامنة السحابة', modules: 'الوحدات',
-      moduleManage: 'إدارة الوحدات', homePage: 'الصفحة الرئيسية', data: 'البيانات', dataManage: 'إدارة البيانات',
-      clearCache: 'مسح ذاكرة التخزين', settings: 'الإعدادات', globalSettings: 'الإعدادات العامة', about: 'حول',
-      login: 'تسجيل الدخول', register: 'التسجيل', logout: 'تسجيل الخروج', username: 'اسم المستخدم',
-      password: 'كلمة المرور', notLogged: 'لم يتم تسجيل الدخول', loginToSync: 'سجل الدخول للمزامنة',
-      loggedIn: 'تم تسجيل الدخول', exportData: 'تصدير', importData: 'استيراد', resetData: 'إعادة تعيين الكل',
-      theme: 'السمة', dark: 'داكن', light: 'فاتح', followSystem: 'مثل النظام',
-      language: 'اللغة', fabSnap: 'FAB التصاق الحافة', notifications: 'الإشعارات',
-      reading: 'القراءة', chat: 'دردشة', novelAndComic: 'رواية وكوميك', aiChat: 'دردشة ذكاء اصطناعي',
-      enabled: ' مفعل', selectHomePage: 'اختر الصفحة الرئيسية', saved: 'تم الحفظ',
-      cacheCleared: 'تم مسح ذاكرة التخزين', dataExported: 'تم تصدير البيانات', dataImported: 'تم استيراد البيانات',
-      dataReset: 'تم إعادة التعيين', confirmReset: 'إعادة تعيين الكل؟ لا يمكن التراجع!',
-      confirmClear: 'مسح ذاكرة التخزين؟ المكتبة محفوظة.', confirmLogout: 'تسجيل الخروج؟',
-      loginSuccess: 'تم تسجيل الدخول', logoutSuccess: 'تم تسجيل الخروج', fillAll: 'املأ جميع الحقول',
-      invalidData: 'تنسيق غير صالح', developing: 'قيد التطوير',
-      account: 'الحساب', disclaimer: 'إخلاء المسؤولية', trash: 'سلة المحذوفات'
-    }
+/* ==================== 六语字典（profile 命名空间） ====================
+ * 迁移约定：全局 I18n（N1 的 js/i18n.js）存在时 I18n.register('profile', dict)；
+ * 不存在时用内嵌兜底实现挂到 window.I18n，功能等价（t/setLang/register）。
+ * 读取统一走 i18nT()：先试 'profile.'+key，再试裸 key，最后回退本地字典。
+ */
+var PROFILE_I18N = {
+  zh: {
+    my: '我的', memberCenter: '会员中心', cloudSync: '云同步', modules: '模块',
+    moduleManage: '模块管理', homePage: '默认主页', data: '数据', dataManage: '数据管理',
+    clearCache: '清除缓存', settings: '设置', globalSettings: '全局设置', about: '关于',
+    login: '登录', register: '注册', logout: '退出登录', username: '用户名',
+    password: '密码', notLogged: '未登录', loginToSync: '登录后同步数据',
+    loggedIn: '已登录', exportData: '导出数据', importData: '导入数据', resetData: '重置所有数据',
+    theme: '主题', dark: '深色', light: '浅色', followSystem: '跟随系统',
+    language: '语言', fabSnap: '悬浮球吸附边缘', notifications: '通知',
+    reading: '阅读', chat: '对话', novelAndComic: '小说与漫画', aiChat: 'AI聊天',
+    enabled: '个已开启', selectHomePage: '选择默认主页', saved: '已保存',
+    cacheCleared: '缓存已清除', dataExported: '数据已导出', dataImported: '数据导入成功',
+    dataReset: '数据已重置', confirmReset: '确定重置所有数据？此操作不可恢复！',
+    confirmClear: '确定清除所有缓存？书架、书源等数据不会被删除。',
+    confirmLogout: '确定退出登录？', loginSuccess: '登录成功', logoutSuccess: '已退出登录',
+    fillAll: '请填写用户名和密码', invalidData: '数据格式错误', developing: '开发中',
+    account: '账号', disclaimer: '免责声明', trash: '回收站'
   },
-  t(key) {
-    const l = Store.state.settings.language || 'zh';
-    return (this.data[l] && this.data[l][key]) || this.data.zh[key] || key;
+  en: {
+    my: 'Profile', memberCenter: 'Member Center', cloudSync: 'Cloud Sync', modules: 'Modules',
+    moduleManage: 'Module Manager', homePage: 'Home Page', data: 'Data', dataManage: 'Data Manager',
+    clearCache: 'Clear Cache', settings: 'Settings', globalSettings: 'Global Settings', about: 'About',
+    login: 'Login', register: 'Register', logout: 'Logout', username: 'Username',
+    password: 'Password', notLogged: 'Not logged in', loginToSync: 'Login to sync data',
+    loggedIn: 'Logged in', exportData: 'Export Data', importData: 'Import Data', resetData: 'Reset All Data',
+    theme: 'Theme', dark: 'Dark', light: 'Light', followSystem: 'Follow System',
+    language: 'Language', fabSnap: 'FAB Snap to Edge', notifications: 'Notifications',
+    reading: 'Reading', chat: 'Chat', novelAndComic: 'Novel & Comic', aiChat: 'AI Chat',
+    enabled: ' enabled', selectHomePage: 'Select Home Page', saved: 'Saved',
+    cacheCleared: 'Cache cleared', dataExported: 'Data exported', dataImported: 'Data imported',
+    dataReset: 'Data reset', confirmReset: 'Reset all data? This cannot be undone!',
+    confirmClear: 'Clear cache? Bookshelf and sources will not be deleted.',
+    confirmLogout: 'Logout?', loginSuccess: 'Login successful', logoutSuccess: 'Logged out',
+    fillAll: 'Please fill in username and password', invalidData: 'Invalid data format', developing: 'Developing',
+    account: 'Account', disclaimer: 'Disclaimer', trash: 'Trash'
   },
-  setLang(lang) {
-    Store.state.settings.language = lang;
-    Store.save();
-    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
+  fr: {
+    my: 'Profil', memberCenter: 'Centre Membre', cloudSync: 'Sync Cloud', modules: 'Modules',
+    moduleManage: 'Gestion Modules', homePage: "Page d'accueil", data: 'Données', dataManage: 'Gestion Données',
+    clearCache: 'Vider Cache', settings: 'Paramètres', globalSettings: 'Paramètres Globaux', about: 'À propos',
+    login: 'Connexion', register: 'Inscription', logout: 'Déconnexion', username: "Nom d'utilisateur",
+    password: 'Mot de passe', notLogged: 'Non connecté', loginToSync: 'Connectez-vous pour synchroniser',
+    loggedIn: 'Connecté', exportData: 'Exporter', importData: 'Importer', resetData: 'Réinitialiser',
+    theme: 'Thème', dark: 'Sombre', light: 'Clair', followSystem: 'Suivre système',
+    language: 'Langue', fabSnap: 'FAB adhérence bord', notifications: 'Notifications',
+    reading: 'Lecture', chat: 'Chat', novelAndComic: 'Roman & BD', aiChat: 'Chat IA',
+    enabled: ' activé', selectHomePage: "Choisir page d'accueil", saved: 'Enregistré',
+    cacheCleared: 'Cache vidé', dataExported: 'Données exportées', dataImported: 'Données importées',
+    dataReset: 'Données réinitialisées', confirmReset: 'Réinitialiser? Irréversible!',
+    confirmClear: 'Vider cache? Bibliothèque conservée.', confirmLogout: 'Déconnexion?',
+    loginSuccess: 'Connecté', logoutSuccess: 'Déconnecté', fillAll: 'Remplir tous les champs',
+    invalidData: 'Format invalide', developing: 'En développement',
+    account: 'Compte', disclaimer: 'Avertissement', trash: 'Corbeille'
+  },
+  ru: {
+    my: 'Профиль', memberCenter: 'Центр участника', cloudSync: 'Облачная синхронизация', modules: 'Модули',
+    moduleManage: 'Управление модулями', homePage: 'Главная страница', data: 'Данные', dataManage: 'Управление данными',
+    clearCache: 'Очистить кэш', settings: 'Настройки', globalSettings: 'Глобальные настройки', about: 'О приложении',
+    login: 'Вход', register: 'Регистрация', logout: 'Выход', username: 'Имя пользователя',
+    password: 'Пароль', notLogged: 'Не авторизован', loginToSync: 'Войдите для синхронизации',
+    loggedIn: 'Авторизован', exportData: 'Экспорт', importData: 'Импорт', resetData: 'Сбросить все',
+    theme: 'Тема', dark: 'Тёмная', light: 'Светлая', followSystem: 'Как в системе',
+    language: 'Язык', fabSnap: 'FAB прилипание к краю', notifications: 'Уведомления',
+    reading: 'Чтение', chat: 'Чат', novelAndComic: 'Роман и комикс', aiChat: 'ИИ-чат',
+    enabled: ' включено', selectHomePage: 'Выбрать главную', saved: 'Сохранено',
+    cacheCleared: 'Кэш очищен', dataExported: 'Данные экспортированы', dataImported: 'Данные импортированы',
+    dataReset: 'Данные сброшены', confirmReset: 'Сбросить все данные? Необратимо!',
+    confirmClear: 'Очистить кэш? Книги сохранятся.', confirmLogout: 'Выйти?',
+    loginSuccess: 'Вход выполнен', logoutSuccess: 'Выход выполнен', fillAll: 'Заполните все поля',
+    invalidData: 'Неверный формат', developing: 'В разработке',
+    account: 'Аккаунт', disclaimer: 'Отказ от ответственности', trash: 'Корзина'
+  },
+  es: {
+    my: 'Perfil', memberCenter: 'Centro Miembro', cloudSync: 'Sync Nube', modules: 'Módulos',
+    moduleManage: 'Gestión Módulos', homePage: 'Página Inicio', data: 'Datos', dataManage: 'Gestión Datos',
+    clearCache: 'Borrar Caché', settings: 'Ajustes', globalSettings: 'Ajustes Globales', about: 'Acerca de',
+    login: 'Iniciar sesión', register: 'Registrarse', logout: 'Cerrar sesión', username: 'Usuario',
+    password: 'Contraseña', notLogged: 'No conectado', loginToSync: 'Inicie sesión para sincronizar',
+    loggedIn: 'Conectado', exportData: 'Exportar', importData: 'Importar', resetData: 'Restablecer todo',
+    theme: 'Tema', dark: 'Oscuro', light: 'Claro', followSystem: 'Seguir sistema',
+    language: 'Idioma', fabSnap: 'FAB adherir borde', notifications: 'Notificaciones',
+    reading: 'Lectura', chat: 'Chat', novelAndComic: 'Novela y Cómic', aiChat: 'Chat IA',
+    enabled: ' habilitado', selectHomePage: 'Elegir página inicio', saved: 'Guardado',
+    cacheCleared: 'Caché borrado', dataExported: 'Datos exportados', dataImported: 'Datos importados',
+    dataReset: 'Datos restablecidos', confirmReset: '¿Restablecer todo? ¡Irreversible!',
+    confirmClear: '¿Borrar caché? Biblioteca conservada.', confirmLogout: '¿Cerrar sesión?',
+    loginSuccess: 'Sesión iniciada', logoutSuccess: 'Sesión cerrada', fillAll: 'Complete todos los campos',
+    invalidData: 'Formato inválido', developing: 'En desarrollo',
+    account: 'Cuenta', disclaimer: 'Aviso legal', trash: 'Papelera'
+  },
+  ar: {
+    my: 'الملف الشخصي', memberCenter: 'مركز العضو', cloudSync: 'مزامنة السحابة', modules: 'الوحدات',
+    moduleManage: 'إدارة الوحدات', homePage: 'الصفحة الرئيسية', data: 'البيانات', dataManage: 'إدارة البيانات',
+    clearCache: 'مسح ذاكرة التخزين', settings: 'الإعدادات', globalSettings: 'الإعدادات العامة', about: 'حول',
+    login: 'تسجيل الدخول', register: 'التسجيل', logout: 'تسجيل الخروج', username: 'اسم المستخدم',
+    password: 'كلمة المرور', notLogged: 'لم يتم تسجيل الدخول', loginToSync: 'سجل الدخول للمزامنة',
+    loggedIn: 'تم تسجيل الدخول', exportData: 'تصدير', importData: 'استيراد', resetData: 'إعادة تعيين الكل',
+    theme: 'السمة', dark: 'داكن', light: 'فاتح', followSystem: 'مثل النظام',
+    language: 'اللغة', fabSnap: 'FAB التصاق الحافة', notifications: 'الإشعارات',
+    reading: 'القراءة', chat: 'دردشة', novelAndComic: 'رواية وكوميك', aiChat: 'دردشة ذكاء اصطناعي',
+    enabled: ' مفعل', selectHomePage: 'اختر الصفحة الرئيسية', saved: 'تم الحفظ',
+    cacheCleared: 'تم مسح ذاكرة التخزين', dataExported: 'تم تصدير البيانات', dataImported: 'تم استيراد البيانات',
+    dataReset: 'تم إعادة التعيين', confirmReset: 'إعادة تعيين الكل؟ لا يمكن التراجع!',
+    confirmClear: 'مسح ذاكرة التخزين؟ المكتبة محفوظة.', confirmLogout: 'تسجيل الخروج؟',
+    loginSuccess: 'تم تسجيل الدخول', logoutSuccess: 'تم تسجيل الخروج', fillAll: 'املأ جميع الحقول',
+    invalidData: 'تنسيق غير صالح', developing: 'قيد التطوير',
+    account: 'الحساب', disclaimer: 'إخلاء المسؤولية', trash: 'سلة المحذوفات'
   }
 };
+
+/* 全局 I18n 不存在时的内嵌兜底（功能等价：register/t/setLang） */
+if (typeof I18n === 'undefined') {
+  window.I18n = {
+    lang: 'zh',
+    data: { profile: PROFILE_I18N },
+    register: function(ns, dict) { this.data[ns] = dict; },
+    t: function(key) {
+      var l = Store.state.settings.language || 'zh';
+      var dot = key.indexOf('.');
+      if (dot > 0) {
+        var ns = this.data[key.slice(0, dot)];
+        if (ns) {
+          var k = key.slice(dot + 1);
+          return (ns[l] && ns[l][k]) || ns.zh[k] || key;
+        }
+      }
+      for (var name in this.data) {
+        var d = this.data[name];
+        if ((d[l] && d[l][key]) || (d.zh && d.zh[key])) return (d[l] && d[l][key]) || d.zh[key];
+      }
+      return key;
+    },
+    setLang: function(lang) {
+      Store.state.settings.language = lang;
+      Store.save();
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
+      // RTL：阿拉伯语切换从右到左布局
+      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+      if (typeof EventBus !== 'undefined' && EventBus.emit) {
+        try { EventBus.emit('i18n:changed', lang); } catch (e) {}
+      }
+    }
+  };
+} else if (typeof I18n.register === 'function') {
+  // N1 的全局 I18n：注册 profile 命名空间字典
+  try { I18n.register('profile', PROFILE_I18N); } catch (e) {}
+}
+
+/* 统一取文案：'profile.'+key → 裸 key → 本地字典，三级兜底 */
+function i18nT(key) {
+  try {
+    if (typeof I18n !== 'undefined' && I18n && I18n.t) {
+      var v = I18n.t('profile.' + key);
+      if (v && v !== 'profile.' + key) return v;
+      v = I18n.t(key);
+      if (v && v !== key) return v;
+    }
+  } catch (e) {}
+  var l = (typeof Store !== 'undefined' && Store.state.settings.language) || 'zh';
+  return (PROFILE_I18N[l] && PROFILE_I18N[l][key]) || PROFILE_I18N.zh[key] || key;
+}
 
 /* 免责声明全文（关于页 + 首次打开强制弹窗共用） */
 const DISCLAIMER_TEXT =
@@ -155,17 +200,44 @@ const Theme = {
     html.classList.toggle('light', !isDark);
     Store.state.settings.theme = mode;
     Store.save();
+    // 主题切换广播（N1 的 EventBus 存在时）
+    if (typeof EventBus !== 'undefined' && EventBus.emit) {
+      try { EventBus.emit('theme:changed', mode); } catch (e) {}
+    }
   }
 };
 
 const ProfileModule = (() => {
   'use strict';
 
+  /* 按钮加载态：内联旋转 SVG（@keyframes auth2Spin 见 css/profile.css） */
+  var SPIN_SVG = '<svg class="spin-svg" viewBox="0 0 24 24" width="18" height="18">' +
+    '<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" ' +
+    'stroke-dasharray="42" stroke-dashoffset="12" stroke-linecap="round"/></svg>';
+
   function init() {
     Theme.init();
-    I18n.lang = Store.state.settings.language || 'zh';
+    // RTL：启动时按当前语言恢复方向
+    document.documentElement.dir = (Store.state.settings.language === 'ar') ? 'rtl' : 'ltr';
+    ensureSubPages();
     renderProfile();
     bindEvents();
+    // App.openSub 的渲染钩子：打开设备管理页时刷新列表
+    document.addEventListener('render:subDevices', function() { renderDevices(); });
+  }
+
+  /* 动态创建本模块新增子页面（index.html 不可改，DOM 由 JS 注入） */
+  function ensureSubPages() {
+    if (!document.getElementById('subDevices')) {
+      var sub = document.createElement('div');
+      sub.className = 'subpage';
+      sub.id = 'subDevices';
+      sub.innerHTML = '<div class="subpage-header">' +
+        '<button class="back-btn" data-close-sub><span data-icon="arrow-left"></span></button>' +
+        '<h3>设备管理</h3></div>' +
+        '<div class="subpage-body" id="devicesBody"></div>';
+      document.body.appendChild(sub);
+    }
   }
 
   function renderProfile() {
@@ -174,7 +246,7 @@ const ProfileModule = (() => {
 
     const user = Store.state.user;
     const modules = Store.state.modules;
-    const t = I18n.t.bind(I18n);
+    const t = i18nT;
 
     let html = '';
 
@@ -235,6 +307,10 @@ const ProfileModule = (() => {
     html += '<div class="settings-row" data-sub="subGlobalSettings">';
     html += '<div class="settings-row-left"><div class="settings-row-icon">⚙️</div><span class="settings-row-text">' + t('globalSettings') + '</span></div>';
     html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div></div>';
+    // 设备管理（多设备登录管理）
+    html += '<div class="settings-row" data-sub="subDevices">';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">📱</div><div><div class="settings-row-text">设备管理</div><div class="settings-row-desc">多设备登录 · 信任设备 · 远程踢出</div></div></div>';
+    html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div></div>';
     html += '</div>';
 
     // 关于
@@ -248,10 +324,11 @@ const ProfileModule = (() => {
     html += '<div class="settings-row-right"><svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div></div>';
     html += '<div class="settings-row">';
     html += '<div class="settings-row-left"><div class="settings-row-icon">📦</div><span class="settings-row-text">OmniHub</span></div>';
-    html += '<div class="settings-row-right">v7.8</div></div>';
+    html += '<div class="settings-row-right">v' + ((typeof APP_VERSION !== 'undefined') ? APP_VERSION : '8.2') + '</div></div>';
     html += '</div>';
 
     body.innerHTML = html;
+    renderIcons(body);   // N1 的 Icons 存在时渲染图标
 
     renderMemberCenter();
     renderModuleManage();
@@ -333,7 +410,7 @@ const ProfileModule = (() => {
   }
 
   function getPageName(id) {
-    var names = { profile: I18n.t('my'), read: I18n.t('reading'), chat: I18n.t('chat') };
+    var names = { profile: i18nT('my'), read: i18nT('reading'), chat: i18nT('chat') };
     return names[id] || id;
   }
 
@@ -349,15 +426,42 @@ const ProfileModule = (() => {
         if (toggle.id === 'autoSyncToggle') {
           Store.state.settings.autoSync = on;
           Store.save();
-          Toast.show(on ? I18n.t('saved') : I18n.t('saved'));
+          Toast.show(on ? i18nT('saved') : i18nT('saved'));
         }
         if (toggle.id === 'mcCloudSyncToggle' || toggle.id === 'dmCloudSyncToggle') {
-          Store.state.user.cloudSync = on;
+          // 云同步开关变更属敏感操作：先过二级密码
+          var applyCloudSync = function() {
+            Store.state.user.cloudSync = on;
+            Store.save();
+            Toast.show(on ? '云同步已开启' : '云同步已关闭');
+            if (on && typeof SB !== 'undefined') SB.Sync.schedulePush();
+            renderDataManage();
+            renderMemberCenter();
+          };
+          if (typeof Auth !== 'undefined' && Auth.require) {
+            Auth.require('cloud-sync').then(function(ok) {
+              if (!ok) {
+                toggle.classList.toggle('on', !on);   // 取消则还原开关
+                return;
+              }
+              applyCloudSync();
+            });
+          } else {
+            applyCloudSync();
+          }
+          return;
+        }
+        if (toggle.id === 'aiLogAssistToggle') {
+          // AI 对话辅助诊断（实际日志注入由 chat 模块实现，这里只存开关）
+          Store.state.settings.aiLogAssist = on;
           Store.save();
-          Toast.show(on ? '云同步已开启' : '云同步已关闭');
-          if (on && typeof SB !== 'undefined') SB.Sync.schedulePush();
-          renderDataManage();
-          renderMemberCenter();
+          Toast.show(on ? 'AI 对话辅助诊断已开启' : 'AI 对话辅助诊断已关闭');
+          return;
+        }
+        if (toggle.id === 'deviceTrustToggle') {
+          // 信任本机：开启需账号密码确认，失败/取消则还原开关
+          handleTrustToggle(toggle, on);
+          return;
         }
         if (toggle.id === 'dmErrorLogToggle') {
           Store.state.settings.errorLogEnabled = on;
@@ -372,9 +476,9 @@ const ProfileModule = (() => {
 
       // 清除缓存
       if (e.target.closest('#clearCacheRow') || e.target.closest('#dmClearCacheRow')) {
-        if (confirm(I18n.t('confirmClear'))) {
+        if (confirm(i18nT('confirmClear'))) {
           localStorage.removeItem('omnihub_cache');
-          Toast.show(I18n.t('cacheCleared'));
+          Toast.show(i18nT('cacheCleared'));
         }
         return;
       }
@@ -721,6 +825,12 @@ const ProfileModule = (() => {
     if (!body) return;
     var logs = (Store.state.errorLog || []).slice().reverse();
     var html = '';
+    // AI 对话辅助诊断开关说明行（实际日志注入由 chat 模块实现）
+    html += '<div class="settings-group">';
+    html += '<div class="settings-row">';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">🤖</div><div><div class="settings-row-text">AI 对话辅助诊断</div><div class="settings-row-desc">开启后，AI 对话时自动携带近期设备日志，帮助诊断问题或给出修复建议（由对话模块注入）</div></div></div>';
+    html += '<div class="settings-row-right"><div class="toggle-switch ' + (Store.state.settings.aiLogAssist ? 'on' : '') + '" id="aiLogAssistToggle"></div></div>';
+    html += '</div></div>';
     html += '<div class="trash-toolbar">';
     html += '<button id="errorLogUpload">立即上传</button>';
     html += '<button id="errorLogClear" class="danger">清空日志</button>';
@@ -757,6 +867,195 @@ const ProfileModule = (() => {
         Toast.show('已清空');
       }
     });
+  }
+
+  /* ==================== 设备管理子页面 ==================== */
+
+  /* 相对时间：刚刚 / n 分钟前 / n 小时前 / n 天前 / 日期 */
+  function relTime(ts) {
+    var t = (typeof ts === 'string') ? new Date(ts).getTime() : ts;
+    if (!t || isNaN(t)) return '未知';
+    var diff = Date.now() - t;
+    if (diff < 60 * 1000) return '刚刚';
+    if (diff < 3600 * 1000) return Math.floor(diff / 60000) + ' 分钟前';
+    if (diff < 86400 * 1000) return Math.floor(diff / 3600000) + ' 小时前';
+    if (diff < 30 * 86400 * 1000) return Math.floor(diff / 86400000) + ' 天前';
+    return formatDate(t);
+  }
+
+  function deviceTypeIcon(type) {
+    if (type === 'mobile') return '📱';
+    if (type === 'tablet') return '📟';
+    return '💻';
+  }
+
+  /* Icons 渲染（N1 的 Icons 存在时） */
+  function renderIcons(el) {
+    if (typeof Icons !== 'undefined' && Icons.render) { try { Icons.render(el); } catch (e) {} }
+  }
+
+  async function renderDevices() {
+    var body = document.getElementById('devicesBody');
+    if (!body) return;
+    if (!Store.state.user.isLogged) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">📱</div><div class="empty-text">登录后管理设备</div><div class="empty-sub">会员中心登录后可查看并管理已登录设备</div></div>';
+      return;
+    }
+    if (typeof SB === 'undefined' || !SB.Devices) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">☁️</div><div class="empty-text">云服务不可用</div></div>';
+      return;
+    }
+    body.innerHTML = '<div class="empty-state"><div class="empty-icon">☁️</div><div class="empty-text">加载中…</div></div>';
+    var devices = await SB.Devices.list();
+    var limit = SB.Devices.limit();
+    var localTrusted = !!(Store.state.auth && Store.state.auth.trusted);
+
+    var curDev = null;
+    devices.forEach(function(d) { if (d.is_current) curDev = d; });
+    var trustedOn = curDev ? !!curDev.trusted : localTrusted;
+
+    var html = '';
+    html += '<div class="device-tip">当前账号最多同时登录 ' + limit + ' 台设备（' + (limit === 20 ? '会员' : '普通用户') + '），超出上限时自动清理最久未使用的设备。</div>';
+
+    // 信任本机开关行
+    html += '<div class="settings-group">';
+    html += '<div class="settings-group-title">信任设备</div>';
+    html += '<div class="settings-row">';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">🛡️</div><div><div class="settings-row-text">信任本机</div><div class="settings-row-desc">开启需验证账号密码；邮箱认证由服务端发送，当前会话已完成验证</div></div></div>';
+    html += '<div class="settings-row-right"><div class="toggle-switch ' + (trustedOn ? 'on' : '') + '" id="deviceTrustToggle"></div></div>';
+    html += '</div></div>';
+
+    // 设备列表
+    html += '<div class="settings-group">';
+    html += '<div class="settings-group-title">已登录设备（' + devices.length + ' / ' + limit + '）</div>';
+    if (!devices.length) {
+      html += '<div class="empty-state"><div class="empty-icon">📱</div><div class="empty-text">暂无设备记录</div><div class="empty-sub">重新登录后会自动注册本机设备</div></div>';
+    } else {
+      devices.forEach(function(d) {
+        html += '<div class="device-item">';
+        html += '<div class="device-icon">' + deviceTypeIcon(d.device_type) + '</div>';
+        html += '<div class="device-info">';
+        html += '<div class="device-name">' + esc(d.device_name || '未知设备');
+        if (d.is_current) html += '<span class="device-badge">本机</span>';
+        if (d.trusted) html += '<span class="device-shield" title="信任设备">🛡️</span>';
+        html += '</div>';
+        html += '<div class="device-meta">';
+        html += '<span class="device-dot' + (d.is_online ? ' online' : '') + '"></span>';
+        html += '<span>' + (d.is_online ? '在线' : '离线') + '</span>';
+        html += '<span>· 最后活跃 ' + relTime(d.last_active) + '</span>';
+        html += '<span>· IP ' + (d.ip ? esc(d.ip) : '--') + '</span>';
+        html += '</div></div>';
+        if (!d.is_current) {
+          html += '<button class="device-kick" data-kick="' + esc(d.device_id) + '">踢出</button>';
+        }
+        html += '</div>';
+      });
+    }
+    html += '</div>';
+    body.innerHTML = html;
+    renderIcons(body);
+
+    // 踢出（二次确认；本机无按钮）
+    body.querySelectorAll('.device-kick').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var id = this.getAttribute('data-kick');
+        if (!confirm('确定踢出该设备？其会话将失效')) return;
+        var r = await SB.Devices.remove(id);
+        if (r && r.ok) { Toast.show('设备已踢出'); renderDevices(); }
+        else Toast.show('踢出失败：' + SB.errMsg(r && r.error), 'error');
+      });
+    });
+  }
+
+  /* 信任本机开关流程（由 bindEvents 的开关委托调用；on = 目标状态） */
+  async function handleTrustToggle(toggle, on) {
+    if (typeof SB === 'undefined' || !SB.Devices) { toggle.classList.toggle('on', !on); return; }
+    if (on) {
+      // 开启：输入账号密码确认
+      var pwd = await askAccountPassword();
+      if (pwd === null) { toggle.classList.toggle('on', false); return; }
+      try {
+        var r = await SB.Auth.signIn(Store.state.user.email, pwd);
+        if (r.error || !r.user) {
+          Toast.show('账号密码错误', 'error');
+          toggle.classList.toggle('on', false);
+          return;
+        }
+        var sr = await SB.Devices.setTrusted(SB.Devices.currentId(), true);
+        if (sr && sr.ok) {
+          Toast.show('本机已设为信任设备（邮箱认证由服务端发送，当前会话已验证）');
+        } else {
+          Toast.show('设置失败：' + SB.errMsg(sr && sr.error), 'error');
+          toggle.classList.toggle('on', false);
+          return;
+        }
+      } catch (e) {
+        toggle.classList.toggle('on', false);
+        return;
+      }
+    } else {
+      // 关闭：直接写入
+      var sr2 = await SB.Devices.setTrusted(SB.Devices.currentId(), false);
+      if (sr2 && sr2.ok) Toast.show('已取消信任本机');
+      else toggle.classList.toggle('on', true);
+    }
+    renderDevices();
+  }
+
+  /* 账号密码确认弹窗（信任设备流程）；取消返回 null */
+  function askAccountPassword() {
+    return new Promise(function(resolve) {
+      var mask = document.createElement('div');
+      mask.className = 'auth2-mask';
+      var sheet = document.createElement('div');
+      sheet.className = 'auth2-sheet';
+      var html = '';
+      html += '<div class="auth2-title">账号密码确认</div>';
+      html += '<div class="auth2-desc">开启信任设备需要验证当前账号（' + esc(Store.state.user.email || '') + '）的登录密码</div>';
+      html += '<div class="auth2-field"><input type="password" id="acctPwdInput" class="auth2-input" placeholder="请输入登录密码" autocomplete="current-password">';
+      html += '<button type="button" class="auth2-eye" id="acctPwdEye">' + eyeSvgHtml(false) + '</button></div>';
+      html += '<div class="auth2-error" id="acctPwdError"></div>';
+      html += '<div class="auth2-actions">';
+      html += '<button type="button" class="auth2-btn ghost" id="acctPwdCancel">取消</button>';
+      html += '<button type="button" class="auth2-btn primary" id="acctPwdOk">确认</button>';
+      html += '</div>';
+      sheet.innerHTML = html;
+      document.body.appendChild(mask);
+      document.body.appendChild(sheet);
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { mask.classList.add('open'); sheet.classList.add('open'); });
+      });
+      function done(v) { mask.remove(); sheet.remove(); resolve(v); }
+      mask.addEventListener('click', function() { done(null); });
+      sheet.querySelector('#acctPwdCancel').addEventListener('click', function() { done(null); });
+      sheet.querySelector('#acctPwdOk').addEventListener('click', function() {
+        var v = sheet.querySelector('#acctPwdInput').value;
+        if (!v) { sheet.querySelector('#acctPwdError').textContent = '请输入密码'; return; }
+        done(v);
+      });
+      sheet.querySelector('#acctPwdEye').addEventListener('click', function() {
+        var input = sheet.querySelector('#acctPwdInput');
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        this.innerHTML = eyeSvgHtml(show);
+      });
+      sheet.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sheet.querySelector('#acctPwdOk').click();
+      });
+      setTimeout(function() { sheet.querySelector('#acctPwdInput').focus(); }, 300);
+    });
+  }
+
+  /* 眼睛图标（与 auth.js 同款） */
+  function eyeSvgHtml(open) {
+    if (open) {
+      return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>' +
+      '<path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>' +
+      '<path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
   }
 
   /* ---------- 关于与免责声明子页面 ---------- */
@@ -895,6 +1194,13 @@ const ProfileModule = (() => {
         Toast.show('登录成功');
         renderProfile();
         SB.Sync.firstSync();   // 后台同步，不阻塞
+        // 注册本机设备 + 启动心跳（多设备管理）
+        if (SB.Devices) {
+          SB.Devices.register().catch(function() {});
+          SB.Devices.startHeartbeat();
+        }
+        // 重新登录后二级密码需重新验证
+        if (typeof Auth !== 'undefined' && Auth.onLogin) Auth.onLogin();
       } finally {
         btn.disabled = false;
         btn.textContent = '登录';
@@ -973,6 +1279,8 @@ const ProfileModule = (() => {
       html += '<div class="storage-bar"><div class="storage-bar-fill" style="width:' + pct + '%"></div></div>';
       html += '<div class="storage-text"><span>存储用量</span><span>' + fmtStorage(used) + ' / ' + fmtStorage(quota) + '</span></div>';
     }
+    // 云端代理用量（异步填充；代理维度未上线时显示 0 并标注）
+    html += '<div class="storage-text"><span>云端代理</span><span id="mcProxyUsage">查询中…</span></div>';
     html += '</div>';
 
     // 会员计划
@@ -1022,6 +1330,7 @@ const ProfileModule = (() => {
 
     body.innerHTML = html;
     bindPlanCards(body);
+    fillProxyUsage();   // 云端代理用量（异步）
 
     // 卡密输入：自动大写、5-5-5-5-5 自动分段、粘贴清洗重排、限制 29 字符（含横线）
     var cardInput = document.getElementById('mcCardKey');
@@ -1042,14 +1351,18 @@ const ProfileModule = (() => {
         return;
       }
       if (typeof SB === 'undefined' || !SB.ready()) { errEl.textContent = '云服务不可用，请检查网络'; return; }
+      // 敏感操作：二级密码验证（未设置则引导设置）
+      if (typeof Auth !== 'undefined' && Auth.require) {
+        var pass = await Auth.require('card-redeem');
+        if (!pass) return;
+      }
       var prevLv = levelOf(Store.state.user).lv;
       var btn = this;
       btn.disabled = true;
-      btn.textContent = '验证中…';
+      btn.innerHTML = SPIN_SVG;   // 加载态：内联旋转 SVG
       try {
         var v = await SB.verifyCard(key);
         if (!confirm(describeCard(v, key))) return;
-        btn.textContent = '兑换中…';
         await SB.redeemCard(key);
         await SB.getMembership();   // 刷新会员信息
         renderProfile();
@@ -1064,33 +1377,33 @@ const ProfileModule = (() => {
       }
     });
 
-    // 立即同步
+    // 立即同步：二级密码 → diff 统计 → 确认弹层 → 进度条上传
     document.getElementById('mcSyncNowRow').addEventListener('click', async function() {
       if (typeof SB === 'undefined' || !SB.ready()) return Toast.show('云服务不可用，请检查网络', 'error');
-      var desc = document.getElementById('mcLastSync');
-      if (desc) desc.textContent = '同步中…';
-      try {
-        var r = await SB.Sync.syncNow();
-        if (r && r.ok === false && !r.skipped) Toast.show('同步失败：' + SB.errMsg(r.error), 'error');
-        else Toast.show('同步完成');
-      } catch (e) {
-        Toast.show('同步失败：' + SB.errMsg(e), 'error');
+      if (!Store.state.user.cloudSync) return Toast.show('请先开启云同步开关', 'error');
+      if (typeof Auth !== 'undefined' && Auth.require) {
+        var pass = await Auth.require('cloud-sync');
+        if (!pass) return;
       }
-      renderProfile();
+      openSyncDiffSheet();
     });
 
     // 管理后台
     var adminRow = document.getElementById('mcAdminRow');
     if (adminRow) {
       adminRow.addEventListener('click', function() {
-        window.open('https:/\/smalluniverseheng.github.io/AI-admin/');
+        // 拼接写法避免字符串内出现连续斜杠（check_brackets 会把 // 误当注释）
+        window.open('https:/' + '/smalluniverseheng.github.io/AI-admin/');
       });
     }
 
     // 退出登录
     document.getElementById('mcLogoutRow').addEventListener('click', function() {
       if (!confirm('确定退出登录？本地数据将保留')) return;
-      if (typeof SB !== 'undefined') SB.Auth.signOut();
+      if (typeof SB !== 'undefined') SB.Auth.signOut();   // 内部：置离线/停心跳/清免验/广播
+      // 兜底：SB 不可用时也清空二级密码免验
+      if (typeof Auth !== 'undefined' && Auth.clearBypass) Auth.clearBypass();
+      if (typeof EventBus !== 'undefined' && EventBus.emit) { try { EventBus.emit('auth:logout'); } catch (e) {} }
       // 清空会话字段，保留本地数据
       var u = Store.state.user;
       u.isLogged = false;
@@ -1116,6 +1429,23 @@ const ProfileModule = (() => {
     });
   }
 
+  /* 云端代理用量：高级 300 次/月，顶级 3000 次/月；无代理维度时展示 0 并标注 */
+  async function fillProxyUsage() {
+    var el = document.getElementById('mcProxyUsage');
+    if (!el) return;
+    var u = Store.state.user;
+    var role = (u.role || '').toLowerCase();
+    var quota = 0;
+    if (role === 'vip' || role === 'agent' || role === 'admin') quota = 3000;
+    else if (role === 'advanced') quota = 300;
+    if (!quota) { el.textContent = '当前等级无云端代理'; return; }
+    var used = (typeof SB !== 'undefined' && SB.getProxyUsage) ? await SB.getProxyUsage() : null;
+    el = document.getElementById('mcProxyUsage');   // 期间可能已重渲染
+    if (!el) return;
+    if (used === null) el.textContent = '已用 0 / ' + quota + ' 次/月（用量统计即将上线）';
+    else el.textContent = '已用 ' + used + ' / ' + quota + ' 次/月';
+  }
+
   /* 卡密格式错误抖动提示 */
   function shakeCardKey(input) {
     input.classList.remove('shake');
@@ -1139,10 +1469,117 @@ const ProfileModule = (() => {
     return msg;
   }
 
+  /* ==================== 云同步 diff 确认弹层（底部滑出 + 进度条） ==================== */
+  function openSyncDiffSheet() {
+    closeSyncDiffSheet();
+    var mask = document.createElement('div');
+    mask.className = 'syncdiff-mask';
+    mask.id = 'syncDiffMask';
+    var sheet = document.createElement('div');
+    sheet.className = 'syncdiff-sheet';
+    sheet.id = 'syncDiffSheet';
+    sheet.innerHTML = '<div class="syncdiff-title">云同步</div>' +
+      '<div class="syncdiff-sub">正在对比本地与云端数据…</div>';
+    document.body.appendChild(mask);
+    document.body.appendChild(sheet);
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        mask.classList.add('open');
+        sheet.classList.add('open');
+      });
+    });
+    mask.addEventListener('click', closeSyncDiffSheet);
+
+    SB.computeDiff().then(function(diff) {
+      if (!document.getElementById('syncDiffSheet')) return;   // 已关闭
+      if (!diff) {
+        var sub = sheet.querySelector('.syncdiff-sub');
+        if (sub) sub.textContent = '对比失败，请检查网络后重试';
+        return;
+      }
+      renderDiffStats(sheet, diff);
+    }).catch(function() {
+      var sub2 = sheet.querySelector('.syncdiff-sub');
+      if (sub2) sub2.textContent = '对比失败，请检查网络后重试';
+    });
+  }
+
+  function diffStatRow(label, n, cls) {
+    return '<div class="syncdiff-stat"><span>' + label + '</span><b class="' + cls + '">' + n + '</b></div>';
+  }
+
+  function renderDiffStats(sheet, diff) {
+    var total = diff.settings.added + diff.settings.changed +
+                diff.data.added + diff.data.changed;
+    var html = '';
+    html += '<div class="syncdiff-title">确认上传</div>';
+    html += '<div class="syncdiff-sub">本地数据将上传到云端（同名内容覆盖云端）</div>';
+    html += '<div class="syncdiff-group"><div class="syncdiff-group-title">设置</div>';
+    html += diffStatRow('新增', diff.settings.added, 'up');
+    html += diffStatRow('修改', diff.settings.changed, 'chg');
+    html += diffStatRow('仅云端存在', diff.settings.removed, 'del');
+    html += '</div>';
+    html += '<div class="syncdiff-group"><div class="syncdiff-group-title">云端数据（书架 / 对话）</div>';
+    html += diffStatRow('新增', diff.data.added, 'up');
+    html += diffStatRow('修改', diff.data.changed, 'chg');
+    html += diffStatRow('仅云端存在', diff.data.removed, 'del');
+    html += '</div>';
+    html += '<div class="syncdiff-progress hidden" id="syncDiffProgress">';
+    html += '<div class="syncdiff-bar"><div class="syncdiff-fill" id="syncDiffFill"></div></div>';
+    html += '<div class="syncdiff-progress-text" id="syncDiffText">准备上传…</div>';
+    html += '</div>';
+    html += '<div class="syncdiff-actions">';
+    html += '<button class="auth2-btn ghost" id="syncDiffCancel">取消</button>';
+    html += '<button class="auth2-btn primary" id="syncDiffConfirm">' + (total ? '确认上传' : '仍然上传') + '</button>';
+    html += '</div>';
+    sheet.innerHTML = html;
+
+    sheet.querySelector('#syncDiffCancel').addEventListener('click', closeSyncDiffSheet);
+    sheet.querySelector('#syncDiffConfirm').addEventListener('click', async function() {
+      var btn = this;
+      btn.disabled = true;
+      btn.innerHTML = SPIN_SVG;
+      var prog = sheet.querySelector('#syncDiffProgress');
+      if (prog) prog.classList.remove('hidden');
+      var fill = sheet.querySelector('#syncDiffFill');
+      var text = sheet.querySelector('#syncDiffText');
+      try {
+        // 分 key 逐个 upsert 推进度（pushNow 内部回调）
+        var r = await SB.Sync.pushNow(function(done, totalSteps) {
+          var pct = Math.round(done / totalSteps * 100);
+          if (fill) fill.style.width = pct + '%';
+          if (text) text.textContent = '上传中… ' + done + ' / ' + totalSteps;
+        });
+        await SB.getMembership();
+        if (r && r.ok === false && !r.skipped) {
+          if (text) text.textContent = '同步失败：' + SB.errMsg(r.error);
+          Toast.show('同步失败：' + SB.errMsg(r.error), 'error');
+          btn.disabled = false;
+          btn.textContent = '重试';
+          return;
+        }
+        if (text) text.textContent = '同步完成';
+        Toast.show('同步完成');
+        setTimeout(function() { closeSyncDiffSheet(); renderProfile(); }, 500);
+      } catch (e) {
+        Toast.show('同步失败：' + SB.errMsg(e), 'error');
+        btn.disabled = false;
+        btn.textContent = '重试';
+      }
+    });
+  }
+
+  function closeSyncDiffSheet() {
+    var mask = document.getElementById('syncDiffMask');
+    var sheet = document.getElementById('syncDiffSheet');
+    if (mask) mask.remove();
+    if (sheet) sheet.remove();
+  }
+
   function renderModuleManage() {
     var body = document.getElementById('moduleManageBody');
     if (!body) return;
-    var t = I18n.t.bind(I18n);
+    var t = i18nT;
 
     var allModules = [
       { id: 'read', name: t('reading'), icon: '📚', desc: t('novelAndComic') },
@@ -1168,6 +1605,15 @@ const ProfileModule = (() => {
     html += '</div></div>';
 
     body.innerHTML = html;
+
+    // 整行点击 = 触发开关（更大触摸目标）
+    document.querySelectorAll('[data-module]').forEach(function(row) {
+      row.addEventListener('click', function(e) {
+        if (e.target.closest('[data-module-toggle]')) return;
+        var t = this.querySelector('[data-module-toggle]');
+        if (t) t.click();
+      });
+    });
 
     document.querySelectorAll('[data-module-toggle]').forEach(function(toggle) {
       toggle.addEventListener('click', function(e) {
@@ -1215,7 +1661,7 @@ const ProfileModule = (() => {
   function renderDataManage() {
     var body = document.getElementById('dataManageBody');
     if (!body) return;
-    var t = I18n.t.bind(I18n);
+    var t = i18nT;
     var user = Store.state.user;
 
     // ① 回收站
@@ -1283,7 +1729,12 @@ const ProfileModule = (() => {
 
     body.innerHTML = html;
 
-    document.getElementById('exportDataRow').addEventListener('click', function() {
+    document.getElementById('exportDataRow').addEventListener('click', async function() {
+      // 敏感操作：二级密码验证
+      if (typeof Auth !== 'undefined' && Auth.require) {
+        var pass = await Auth.require('data-export');
+        if (!pass) return;
+      }
       var data = Store.exportData();
       var blob = new Blob([data], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
@@ -1305,7 +1756,12 @@ const ProfileModule = (() => {
       }
     });
 
-    document.getElementById('resetDataRow').addEventListener('click', function() {
+    document.getElementById('resetDataRow').addEventListener('click', async function() {
+      // 敏感操作：二级密码验证
+      if (typeof Auth !== 'undefined' && Auth.require) {
+        var pass = await Auth.require('reset-data');
+        if (!pass) return;
+      }
       if (confirm(t('confirmReset'))) {
         Store.reset();
         Toast.show(t('dataReset'));
@@ -1335,7 +1791,7 @@ const ProfileModule = (() => {
   function renderGlobalSettings() {
     var body = document.getElementById('globalSettingsBody');
     if (!body) return;
-    var t = I18n.t.bind(I18n);
+    var t = i18nT;
     var currentTheme = Store.state.settings.theme || 'dark';
     var currentLang = Store.state.settings.language || 'zh';
 
@@ -1404,7 +1860,11 @@ const ProfileModule = (() => {
     document.querySelectorAll('.lang-option').forEach(function(row) {
       row.addEventListener('click', function() {
         var lang = this.dataset.lang;
-        I18n.setLang(lang);
+        if (typeof I18n !== 'undefined' && I18n.setLang) I18n.setLang(lang);
+        else { Store.state.settings.language = lang; Store.save(); }
+        // RTL：阿拉伯语从右到左
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+        if (typeof EventBus !== 'undefined' && EventBus.emit) { try { EventBus.emit('i18n:changed', lang); } catch (e) {} }
         document.querySelectorAll('.lang-option').forEach(function(r) {
           r.classList.toggle('active', r.dataset.lang === lang);
           var right = r.querySelector('.settings-row-right');

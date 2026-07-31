@@ -1,10 +1,30 @@
-const VERSION = 'v8.1';
+const VERSION = 'v8.2';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [
   '/',
   '/index.html',
   '/css/style.css',
+  '/css/global.css',
+  '/css/read.css',
+  '/css/models.css',
+  '/css/chat.css',
+  '/css/profile.css',
+  '/js/event-bus.js',
+  '/js/i18n.js',
+  '/js/backend-config.js',
+  '/js/ui-icons.js',
+  '/js/device.js',
+  '/js/auth.js',
+  '/js/source-url-resolver.js',
+  '/js/leaderboard-data.js',
+  '/js/custom-providers.js',
+  '/js/token-meter.js',
+  '/js/plugins/web-search.js',
+  '/js/mcp-client.js',
+  '/js/modules/chat-modes.js',
+  '/js/modules/models.js',
+  '/js/modules/keys.js',
   '/js/store.js',
   '/js/supabase.js',
   '/js/ai-providers.js',

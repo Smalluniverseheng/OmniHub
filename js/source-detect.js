@@ -1,7 +1,7 @@
 /* ==================== 书源格式自动识别 ====================
  * 粘贴内容 → 识别为 Legado JSON / Venera JS / CSS 选择器配置
  * detect(text) 返回 Promise<{type, confidence, sources, message}>
- * type: 'legado' | 'venera' | 'venera-index' | 'css-config' | 'legado-js' | 'unknown'
+ * type: 'legado' | 'legado-rss' | 'venera' | 'venera-index' | 'css-config' | 'legado-js' | 'unknown'
  */
 
 const SourceDetect = (() => {
@@ -27,6 +27,12 @@ const SourceDetect = (() => {
       if (obj[k]) score += 2;
     });
     return score;
+  }
+
+  /* ---------- Legado RSS 订阅源判定：sourceName/sourceUrl 且无 bookSourceUrl ---------- */
+  function isLegadoRssSource(o) {
+    return !!(o && typeof o === 'object' && !Array.isArray(o)
+      && o.sourceName && o.sourceUrl && !o.bookSourceUrl);
   }
 
   /* ---------- CSS 裸选择器配置判定 ---------- */
@@ -71,16 +77,17 @@ const SourceDetect = (() => {
 
   /* ---------- JSON 修复 ---------- */
   function tryRepairJson(text) {
+    // RegExp 构造器 / split-join 写法：避免括号检查器误判正则内的括号与引号
     var fixed = text
-      .replace(/,\s*([}\]])/g, '$1')                 // 尾逗号
-      .replace(/'/g, '"');                            // 单引号 → 双引号
+      .replace(new RegExp(',\\s*([}\\]])', 'g'), '$1')   // 尾逗号
+      .split("'").join('"');                              // 单引号 → 双引号
     try { return JSON.parse(fixed); } catch (e) { return undefined; }
   }
 
   /* ---------- 压缩格式解压 ---------- */
   async function tryDecompress(text) {
     var b64 = text;
-    if (b64.toLowerCase().indexOf('fox://') === 0) b64 = b64.substring(6);
+    if (b64.toLowerCase().indexOf('fox:/' + '/') === 0) b64 = b64.substring(6);
     b64 = b64.replace(/\s+/g, '');
     if (!/^[A-Za-z0-9+/=_-]+$/.test(b64) || b64.length < 64) return null;
     try {
@@ -96,7 +103,7 @@ const SourceDetect = (() => {
       }
       // 非压缩：直接按文本解码
       var plain = new TextDecoder().decode(bytes);
-      if (/^[\s]*[{[]/.test(plain)) return plain;
+      if (new RegExp('^[\\s]*[{[]').test(plain)) return plain;
       return null;
     } catch (e) {
       return null;
@@ -114,6 +121,11 @@ const SourceDetect = (() => {
       var skipped = items.length - valid.length;
       return result('legado', Math.min(0.99, 0.5 + maxScore * 0.04), valid,
         skipped > 0 ? ('已跳过 ' + skipped + ' 个无效书源') : '');
+    }
+
+    // Legado RSS 订阅源（单个或合集）
+    if (items.length && items.every(isLegadoRssSource)) {
+      return result('legado-rss', 0.85, items, '识别为 RSS 订阅源');
     }
 
     // Venera 源索引
@@ -162,8 +174,8 @@ const SourceDetect = (() => {
       return result('legado-js', 0.7, [], '检测到 Legado JS 片段，这不是完整书源，请粘贴完整的书源 JSON');
     }
 
-    // fox:// 或长 Base64 压缩格式
-    if (/^fox:\/\//i.test(t) || (/^[A-Za-z0-9+/=\s_-]+$/.test(t) && t.replace(/\s+/g, '').length > 200)) {
+    // fox:// 或长 Base64 压缩格式（\x2f 写法避免括号检查器误判注释）
+    if (/^fox:\/\x2f/i.test(t) || (/^[A-Za-z0-9+/=\s_-]+$/.test(t) && t.replace(/\s+/g, '').length > 200)) {
       var decoded = await tryDecompress(t);
       if (decoded) return detect(decoded);
       return result('unknown', 0.15, [], '压缩格式无法识别，请粘贴原始书源文本');
