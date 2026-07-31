@@ -542,7 +542,11 @@ const CHANGELOG = [
   ,{ version: '8.6', date: '2026-07-31', changes: [
     '修复 Venera 探索页三种返回格式兼容性：数组 / multiPageComicList {comics} / singlePageWithMultiPart {分区:列表} 全部支持，分区名并入标签（包子漫画等官方图源发现页可用）'
   ]}
+  ,{ version: '8.7', date: '2026-07-31', changes: [
+    '修复 Venera 搜索返回格式兼容：数组 / {comics, maxPage} / {分类:列表} 全部支持（包子漫画等官方图源搜索可用）'
+  ]}
 ];
+
 
 
 

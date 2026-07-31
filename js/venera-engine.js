@@ -245,7 +245,14 @@ const VeneraEngine = (() => {
     const src = ComicSource.sources[sourceKey];
     if (!src || !src.search || !src.search.load) throw new Error('图源不支持搜索');
     const res = await src.search.load(keyword, options || {}, page || 1);
-    return (res || []).map(c => ({
+    // 兼容：数组 / {comics, maxPage} / {分类: [comics]}
+    let list = [];
+    if (Array.isArray(res)) list = res;
+    else if (res && Array.isArray(res.comics)) list = res.comics;
+    else if (res && typeof res === 'object') {
+      Object.keys(res).forEach(function(k) { if (Array.isArray(res[k])) list = list.concat(res[k]); });
+    }
+    return list.map(c => ({
       id: c.id, name: c.title, author: c.subtitle || '',
       cover: c.cover || '', tags: c.tags || [],
       description: c.description || '', stars: c.stars || 0,
