@@ -13,6 +13,11 @@ const BackendConfig = (() => {
     aiGateway: aiGateway,
     /* 通用抓取代理（绕 CORS；返回 JSON {ok,status,contentType,text}） */
     fetchProxy: function(url) { return workerBase + '/fetch?url=' + encodeURIComponent(url); },
+    /* Supabase 边缘函数抓取代理（国内可达性兜底；GET 传 url，无参返回 POST 端点） */
+    supabaseProxy: function(url) {
+      var base = 'https://mxvxlgjzeboktufumxbp.supabase.co/functions/v1/fetch-proxy';
+      return url ? base + '?url=' + encodeURIComponent(url) : base;
+    },
     /* URL 探测（判型 + HTML 页面 JSON 链接发现） */
     probe: function(url) { return workerBase + '/probe?url=' + encodeURIComponent(url); },
     /* 官方源仓库（Neon） */

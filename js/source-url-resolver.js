@@ -142,13 +142,28 @@ const SourceUrlResolver = (() => {
     return { contentType: data.contentType || '', text: data.text };
   }
 
-  /* ---------- probe：直连 → 代理，返回 {url, kind, text} 或 null ---------- */
+  /* Supabase 边缘函数兜底（workers 不可达时；返回 {status,contentType,body}） */
+  async function probeViaSupabase(url) {
+    if (typeof BackendConfig === 'undefined' || !BackendConfig.supabaseProxy) throw new Error('代理未配置');
+    var resp = await fetch(BackendConfig.supabaseProxy(url), { credentials: 'omit' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (!data || data.body == null || data.status >= 400) {
+      throw new Error((data && data.error) || '代理抓取失败');
+    }
+    return { contentType: data.contentType || '', text: data.body };
+  }
+
+  /* ---------- probe：直连 → worker 代理 → supabase 代理，返回 {url, kind, text} 或 null ---------- */
   async function probe(url) {
     var got = null;
     try { got = await probeDirect(url); }
     catch (e) {
       try { got = await probeViaProxy(url); }
-      catch (e2) { return null; }
+      catch (e2) {
+        try { got = await probeViaSupabase(url); }
+        catch (e3) { return null; }
+      }
     }
     var kind = classify(url, got.contentType, got.text);
     return { url: url, kind: kind, text: got.text, contentType: got.contentType };

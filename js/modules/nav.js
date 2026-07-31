@@ -2,8 +2,7 @@
 /* v8.2 增强：
    - init 恢复 Store.state.settings.fabPosition（此前只写不读）；RTL 默认吸附左侧
    - 鼠标拖拽与触摸共用一套吸附逻辑；拖拽中 scale(1.1) + 阴影扩散
-   - 扇形模式：启用模块 ≤5 个时菜单项绕球按上方 120° 弧均布，逐项 scale(0)→1 错开 30ms；
-     >5 保持分页（每页 6 手机 / 4 手表）
+   - 面板统一为居中四方面板（v8.3 起移除扇形模式），分页每页 6 手机 / 4 手表
    - 编辑模式拖动排序：长按图标后拖动，其余图标 FLIP 让位，松手写回 navItems order；
      「我的」fixed 不可删不可拖、固定首位
 */
@@ -32,9 +31,9 @@ const Nav = (() => {
       .sort(function(a, b) { return a.order - b.order; });
   }
 
-  // 扇形模式：模块 ≤5 个
+  // 面板模式：统一居中四方面板（用户明确要求，不再使用扇形）
   function isFanMode() {
-    return enabledItems().length <= 5;
+    return false;
   }
 
   function init() {

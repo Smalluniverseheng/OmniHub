@@ -523,4 +523,10 @@ const CHANGELOG = [
     '修复回归BUG：16处[data-icon]图标（返回箭头/搜索/设置）不渲染的问题，接入Tabler风格SVG图标集+MutationObserver自动渲染',
     '后端三件套：Cloudflare omnihub-proxy（书源代理+内容API）、Supabase error_logs设备日志表+user_devices设备列、Neon omnihub-ops运营库（官方书源/排行榜/定价）'
   ]}
+  ,{ version: '8.3', date: '2026-07-31', changes: [
+    '悬浮球菜单移除扇形模式，统一为屏幕居中四方面板（应用户要求改回）',
+    '书源链路新增 Supabase 边缘函数 fetch-proxy 兜底代理（国内网络下 workers.dev 不可达时自动回退，导入/探测/搜索全链路生效）',
+    '抓取链升级为：设备本地直连 → Cloudflare Worker → Supabase 边缘函数 → 公共代理'
+  ]}
 ];
+

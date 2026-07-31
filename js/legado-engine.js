@@ -8,7 +8,7 @@
  *   ① 直连（12s 超时，AbortController）
  *   ② BackendConfig.fetchProxy：GET → query url；POST/带 body/带自定义 header →
  *      POST worker /fetch JSON {url,method,headers,body}，解包 {ok,text}
- *   ③ allorigins → ④ corsproxy.io（公共代理仅支持 GET）
+ *   ③ Supabase 边缘函数 fetch-proxy（国内可达性兜底）→ ④ allorigins → ⑤ corsproxy.io（公共代理仅支持 GET）
  * NetFetch.proxied(url, init)：跳过直连，只走代理链（调用方已直连失败时用）。
  */
 const NetFetch = (() => {
@@ -80,7 +80,35 @@ const NetFetch = (() => {
     return data.text;
   }
 
-  /* ③④ 公共代理（仅 GET） */
+  /* ③ Supabase 边缘函数代理（国内可达性兜底，响应 {status, body}） */
+  async function viaSupabase(url, init) {
+    var data;
+    if (needsWorkerPost(init)) {
+      var r = await fetch(BackendConfig.supabaseProxy(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({
+          url: url,
+          method: methodOf(init),
+          headers: (init && init.headers) || {},
+          body: init && init.body != null ? String(init.body) : undefined
+        })
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      data = await r.json();
+    } else {
+      var g = await fetch(BackendConfig.supabaseProxy(url), { credentials: 'omit' });
+      if (!g.ok) throw new Error('HTTP ' + g.status);
+      data = await g.json();
+    }
+    if (!data || data.body == null || data.status >= 400) {
+      throw new Error((data && data.error) || 'Supabase 代理抓取失败');
+    }
+    return data.body;
+  }
+
+  /* ④⑤ 公共代理（仅 GET） */
   async function viaPublicProxies(url) {
     var lastErr = null;
     for (var i = 0; i < PUBLIC_PROXIES.length; i++) {
@@ -93,10 +121,11 @@ const NetFetch = (() => {
     throw lastErr || new Error('公共代理不可用');
   }
 
-  /* 代理链：worker → allorigins → corsproxy.io */
+  /* 代理链：worker → supabase 边缘函数 → allorigins → corsproxy.io */
   async function proxied(url, init) {
     var errs = [];
     try { return await viaWorker(url, init); } catch (e) { errs.push(e.message); }
+    try { return await viaSupabase(url, init); } catch (e1) { errs.push(e1.message); }
     if (!needsWorkerPost(init)) {
       try { return await viaPublicProxies(url); } catch (e2) { errs.push(e2.message); }
     }
