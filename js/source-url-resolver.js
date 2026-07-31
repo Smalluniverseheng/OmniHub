@@ -159,10 +159,16 @@ const SourceUrlResolver = (() => {
     var got = null;
     try { got = await probeDirect(url); }
     catch (e) {
-      try { got = await probeViaProxy(url); }
-      catch (e2) {
-        try { got = await probeViaSupabase(url); }
-        catch (e3) { return null; }
+      if (typeof Promise.any === 'function') {
+        // worker 与 supabase 竞速，谁先成功用谁（导入探测提速）
+        try { got = await Promise.any([probeViaProxy(url), probeViaSupabase(url)]); }
+        catch (e2) { return null; }
+      } else {
+        try { got = await probeViaProxy(url); }
+        catch (e3) {
+          try { got = await probeViaSupabase(url); }
+          catch (e4) { return null; }
+        }
       }
     }
     var kind = classify(url, got.contentType, got.text);

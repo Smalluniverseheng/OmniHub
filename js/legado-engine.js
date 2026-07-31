@@ -14,7 +14,13 @@
 const NetFetch = (() => {
   'use strict';
 
-  var DIRECT_TIMEOUT = 12000;
+  var DIRECT_TIMEOUT = 6000;
+  /* 会话级直连失败记忆：某 host 直连失败过一次（CORS/超时），本次会话不再尝试直连，
+     后续请求直接走代理，避免每个请求都白等 6s —— 搜索提速关键 */
+  var directBadHosts = {};
+  function hostOf(url) {
+    try { return new URL(url).host; } catch (e) { return url; }
+  }
   // 注：字符串拆分写法（'https:/' + '/...'）是为了让括号检查器不误判注释
   var PUBLIC_PROXIES = ['https:/' + '/api.allorigins.win/raw?url=', 'https:/' + '/corsproxy.io/?'];
 
@@ -36,8 +42,9 @@ const NetFetch = (() => {
     return opts;
   }
 
-  /* ① 直连（12s 超时） */
+  /* ① 直连（6s 超时；已知失败 host 直接跳过） */
   async function direct(url, init) {
+    if (directBadHosts[hostOf(url)]) throw new Error('直连已标记失败(跳过)');
     var ctrl = new AbortController();
     var timer = setTimeout(function() { ctrl.abort(); }, DIRECT_TIMEOUT);
     try {
@@ -121,11 +128,17 @@ const NetFetch = (() => {
     throw lastErr || new Error('公共代理不可用');
   }
 
-  /* 代理链：worker → supabase 边缘函数 → allorigins → corsproxy.io */
+  /* 代理链：worker 与 supabase 边缘函数竞速（谁先成功用谁）→ 公共代理兜底 */
   async function proxied(url, init) {
     var errs = [];
-    try { return await viaWorker(url, init); } catch (e) { errs.push(e.message); }
-    try { return await viaSupabase(url, init); } catch (e1) { errs.push(e1.message); }
+    if (typeof Promise.any === 'function') {
+      try {
+        return await Promise.any([viaWorker(url, init), viaSupabase(url, init)]);
+      } catch (e) { errs.push('Worker/Supabase 均失败'); }
+    } else {
+      try { return await viaWorker(url, init); } catch (e) { errs.push(e.message); }
+      try { return await viaSupabase(url, init); } catch (e1) { errs.push(e1.message); }
+    }
     if (!needsWorkerPost(init)) {
       try { return await viaPublicProxies(url); } catch (e2) { errs.push(e2.message); }
     }
@@ -134,7 +147,13 @@ const NetFetch = (() => {
 
   async function text(url, init) {
     try { return await direct(url, init); }
-    catch (e) { return await proxied(url, init); }
+    catch (e) {
+      // 只有网络层失败（CORS/超时/DNS）才标记；HTTP 状态错误说明 host 可达，不标记
+      if (!/^HTTP /.test(e && e.message || '') && !/已标记失败/.test(e && e.message || '')) {
+        directBadHosts[hostOf(url)] = true;
+      }
+      return await proxied(url, init);
+    }
   }
 
   return { text: text, proxied: proxied };

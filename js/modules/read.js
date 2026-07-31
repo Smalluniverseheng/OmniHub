@@ -90,6 +90,7 @@ const ReadModule = (() => {
 
     if (readView === 'discover') { renderDiscover(); return; }
     if (readView === 'bookmark') { renderBookmark(); return; }
+    if (readView === 'profile') { renderReadMine(); return; }
 
     var html = '';
     // 下划线式 Tab 栏（持久指示条）
@@ -178,10 +179,6 @@ const ReadModule = (() => {
 
   /* ---------- 底部导航视图切换 ---------- */
   function setView(view) {
-    if (view === 'profile') {
-      if (window.App && App.switchPage) App.switchPage('profile');
-      return;
-    }
     readView = view;
     document.querySelectorAll('#readBottomNav .read-nav-item').forEach(function(item) {
       item.classList.toggle('active', item.dataset.readview === view);
@@ -1452,6 +1449,12 @@ const ReadModule = (() => {
     officialBtn.textContent = '官方源仓库';
     bar.appendChild(officialBtn);
     officialBtn.addEventListener('click', openOfficialSheet);
+
+    var veneraBtn = document.createElement('button');
+    veneraBtn.id = 'sourceVeneraRepoBtn';
+    veneraBtn.textContent = 'Venera 图源仓库';
+    bar.appendChild(veneraBtn);
+    veneraBtn.addEventListener('click', openVeneraRepoSheet);
   }
 
   /* ==================== 回收站 ==================== */
@@ -1604,6 +1607,164 @@ const ReadModule = (() => {
   }
 
   /* ==================== 阅读设置子页 ==================== */
+
+  /* ==================== 阅读「我的」页 ====================
+   * Legado 式布局：书源管理/回收站/仓库/阅读设置全部集中在「我的」，
+   * 顶部不再放设置入口（应用户要求） */
+  function renderReadMine() {
+    var body = el('readBody');
+    if (!body) return;
+    var st = Store.state.read.settings || {};
+    var sources = Store.state.read.sources;
+    var trash = Store.state.read.trash || [];
+    var chev = ' <svg class="icon-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>';
+
+    var html = '<div class="read-mine">';
+
+    html += '<div class="settings-row" data-sub="subReadSources">'
+      + '<div class="settings-row-left"><div class="settings-row-icon">\u{1F4DA}</div><span class="settings-row-text">书源管理</span></div>'
+      + '<div class="settings-row-right">' + sources.length + ' 个书源' + chev + '</div></div>';
+
+    html += '<div class="settings-row" id="mineTrashRow">'
+      + '<div class="settings-row-left"><div class="settings-row-icon">\u{1F5D1}\u{FE0F}</div><span class="settings-row-text">回收站</span></div>'
+      + '<div class="settings-row-right">' + (trash.length ? trash.length + ' 项' : '空') + chev + '</div></div>';
+
+    html += '<div class="settings-row" id="mineOfficialRow">'
+      + '<div class="settings-row-left"><div class="settings-row-icon">\u{1F4E6}</div><span class="settings-row-text">官方书源仓库</span></div>'
+      + '<div class="settings-row-right">一键导入' + chev + '</div></div>';
+
+    html += '<div class="settings-row" id="mineVeneraRow">'
+      + '<div class="settings-row-left"><div class="settings-row-icon">\u{1F9E9}</div><span class="settings-row-text">Venera 官方图源仓库</span></div>'
+      + '<div class="settings-row-right">漫画/图文' + chev + '</div></div>';
+
+    html += '<div class="settings-row"><div class="settings-row-left"><div class="settings-row-icon">\u{1F4D6}</div><span class="settings-row-text">默认翻页模式</span></div>'
+      + '<div class="settings-row-right"><select id="rmReaderMode">'
+      + '<option value="gallery-rtl"' + (st.readerMode === 'gallery-rtl' ? ' selected' : '') + '>日漫翻页（右→左）</option>'
+      + '<option value="gallery-ltr"' + (st.readerMode === 'gallery-ltr' ? ' selected' : '') + '>国漫翻页（左→右）</option>'
+      + '<option value="continuous-ttb"' + (st.readerMode === 'continuous-ttb' ? ' selected' : '') + '>连续滚动（条漫）</option>'
+      + '</select></div></div>';
+
+    var pre = parseInt(st.preloadCount, 10) || 3;
+    html += '<div class="settings-row"><div class="settings-row-left"><div class="settings-row-icon">\u{23E9}</div><span class="settings-row-text">预加载页数</span></div>'
+      + '<div class="settings-row-right"><select id="rmPreload">';
+    for (var i = 1; i <= 5; i++) {
+      html += '<option value="' + i + '"' + (pre === i ? ' selected' : '') + '>' + i + ' 页</option>';
+    }
+    html += '</select></div></div>';
+
+    html += '<div class="settings-row"><div class="settings-row-left"><div class="settings-row-icon">\u{1F524}</div><span class="settings-row-text">小说字号</span></div>'
+      + '<div class="settings-row-right"><select id="rmFontSize">';
+    [14, 16, 18, 20, 22, 24].forEach(function(v) {
+      html += '<option value="' + v + '"' + ((parseInt(st.fontSize, 10) || 16) === v ? ' selected' : '') + '>' + v + 'px</option>';
+    });
+    html += '</select></div></div>';
+
+    html += '<div class="settings-row"><div class="settings-row-left"><div class="settings-row-icon">\u{1F4CF}</div><span class="settings-row-text">小说行距</span></div>'
+      + '<div class="settings-row-right"><select id="rmLineHeight">';
+    [1.2, 1.4, 1.6, 1.8, 2.0, 2.2].forEach(function(v) {
+      html += '<option value="' + v + '"' + (Math.abs((parseFloat(st.lineHeight) || 1.6) - v) < 0.01 ? ' selected' : '') + '>' + v.toFixed(1) + '</option>';
+    });
+    html += '</select></div></div>';
+
+    html += '</div>';
+    body.innerHTML = html;
+
+    var t = el('mineTrashRow');
+    if (t) t.addEventListener('click', renderTrash);
+    var o = el('mineOfficialRow');
+    if (o) o.addEventListener('click', openOfficialSheet);
+    var v = el('mineVeneraRow');
+    if (v) v.addEventListener('click', openVeneraRepoSheet);
+
+    function saveSetting(key, value) {
+      Store.state.read.settings[key] = value;
+      Store.save();
+    }
+    var mode = body.querySelector('#rmReaderMode');
+    if (mode) mode.addEventListener('change', function() { saveSetting('readerMode', this.value); Toast.show('默认翻页模式已保存'); });
+    var pre2 = body.querySelector('#rmPreload');
+    if (pre2) pre2.addEventListener('change', function() { saveSetting('preloadCount', parseInt(this.value, 10) || 3); });
+    var fs = body.querySelector('#rmFontSize');
+    if (fs) fs.addEventListener('change', function() { saveSetting('fontSize', parseInt(this.value, 10) || 16); });
+    var lh = body.querySelector('#rmLineHeight');
+    if (lh) lh.addEventListener('change', function() { saveSetting('lineHeight', parseFloat(this.value) || 1.6); });
+  }
+
+  /* ==================== Venera 官方图源仓库（直接接 venera-app/venera-configs） ==================== */
+  var VENERA_REPO_RAW = 'https:/' + '/raw.githubusercontent.com/venera-app/venera-configs/main/';
+
+  function openVeneraRepoSheet() {
+    ensureOfficialSheet();
+    var sheet = el('officialSourceSheet');
+    sheet.innerHTML = '<div class="official-head"><span>Venera 官方图源仓库</span>'
+      + '<button class="ghost" id="officialClose">关闭</button></div>'
+      + '<div class="official-body" id="officialSourceBody">'
+      + '<div class="empty-state"><div class="loading-spinner"></div><div>加载中…</div></div></div>';
+    el('officialSourceMask').classList.add('open');
+    sheet.classList.add('open');
+    el('officialClose').addEventListener('click', closeOfficialSheet);
+    loadVeneraRepo();
+  }
+
+  async function loadVeneraRepo() {
+    var body = el('officialSourceBody');
+    if (!body) return;
+    try {
+      var text = await NetFetch.text(VENERA_REPO_RAW + 'index.json');
+      var list = JSON.parse(text);
+      if (!Array.isArray(list) || !list.length) throw new Error('仓库索引为空');
+      var html = '';
+      list.forEach(function(it, i) {
+        html += '<div class="official-item">'
+          + '<div class="official-item-info">'
+          + '<div class="official-item-name">' + esc(it.name || it.key || '未命名')
+          + '<span class="official-badge">v' + esc(it.version || '') + '</span>'
+          + '<span class="official-badge format">venera</span>'
+          + '</div>'
+          + '<div class="official-item-url">' + esc(it.description || it.fileName || '') + '</div>'
+          + '</div>'
+          + '<button class="source-item-btn venera-import" data-vidx="' + i + '">导入</button>'
+          + '</div>';
+      });
+      body.innerHTML = html;
+      body.querySelectorAll('.venera-import').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          importVeneraRepoSource(list[parseInt(btn.dataset.vidx, 10)], btn);
+        });
+      });
+    } catch (e) {
+      body.innerHTML = '<div class="empty-state"><div class="empty-icon">\u{26A0}\u{FE0F}</div>'
+        + '<div class="empty-text">仓库加载失败</div><div class="empty-sub">' + esc(e.message || '') + '</div>'
+        + '<button class="empty-action-btn" id="veneraRetry">重试</button></div>';
+      var retry = el('veneraRetry');
+      if (retry) retry.addEventListener('click', loadVeneraRepo);
+    }
+  }
+
+  /* 导入单个 Venera 图源：拉取官方 JS → 装入引擎 → 入源列表 */
+  async function importVeneraRepoSource(item, btn) {
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = '导入中…'; }
+      if (typeof VeneraEngine === 'undefined') throw new Error('Venera 引擎未加载');
+      var key = item.key || String(item.fileName || '').replace(/\.js$/, '');
+      var raw = await NetFetch.text(VENERA_REPO_RAW + item.fileName);
+      try { VeneraEngine.loadSource(raw, key); } catch (e) { /* 已加载过则忽略 */ }
+      var exist = Store.state.read.sources.find(function(s) { return (s.key || s.name) === key; });
+      if (!exist) {
+        Store.state.read.sources.push({
+          name: item.name || key, key: key, engine: 'venera', type: 'comic',
+          raw: raw, enabled: true, hasExplore: true, url: ''
+        });
+        Store.save();
+      }
+      Toast.show('已导入「' + (item.name || key) + '」');
+      if (btn) { btn.textContent = '已导入'; btn.disabled = false; }
+      renderReadSettings();
+    } catch (e) {
+      Toast.show('导入失败：' + (e.message || e), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '重试'; }
+    }
+  }
 
   function renderReadSettings() {
     var body = el('readSettingsBody');

@@ -18,6 +18,17 @@ const LegadoConverter = (() => {
   function parseExploreCategories(raw) {
     var text = trim(raw && raw.exploreUrl);
     if (!text) return [];
+    // JSON 数组格式：[{"title":"分类","url":"https://..."}, ...]
+    if (text.charAt(0) === '[') {
+      try {
+        var arr = JSON.parse(text);
+        if (Array.isArray(arr)) {
+          return arr.map(function(o) {
+            return { title: trim(o && o.title) || '默认', url: trim(o && o.url) };
+          }).filter(function(c) { return !!c.url; });
+        }
+      } catch (e) { /* 落到分隔符解析 */ }
+    }
     var lines = text.split(/\r?\n|&&/).map(trim).filter(function(l) { return !!l; });
     var cats = [];
     lines.forEach(function(line) {

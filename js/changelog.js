@@ -528,5 +528,13 @@ const CHANGELOG = [
     '书源链路新增 Supabase 边缘函数 fetch-proxy 兜底代理（国内网络下 workers.dev 不可达时自动回退，导入/探测/搜索全链路生效）',
     '抓取链升级为：设备本地直连 → Cloudflare Worker → Supabase 边缘函数 → 公共代理'
   ]}
+  ,{ version: '8.4', date: '2026-07-31', changes: [
+    '搜索大幅提速：直连超时 12s→6s、host 级直连失败会话记忆（失败过一次直接走代理）、Worker 与 Supabase 代理竞速，导入探测同样竞速',
+    '阅读「我的」页上线（Legado 式布局）：书源管理/回收站/官方书源仓库/Venera 图源仓库/翻页模式/预加载/字号/行距全部集中于此，顶部设置齿轮移除',
+    'Venera 官方图源仓库直连 venera-app/venera-configs：索引列表+一键导入官方 JS 图源（漫画/图文）',
+    '发现页分类解析升级：Legado exploreUrl 支持 JSON 数组格式（不再回落到错误标签）',
+    '修复阅读底栏「我的」点击跳转全局模块、打不开阅读内设置的问题'
+  ]}
 ];
+
 
