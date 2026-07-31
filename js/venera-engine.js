@@ -209,11 +209,20 @@ const VeneraEngine = (() => {
     };
 
     try {
-      win.eval(jsCode);
+      // eval 中的 class 声明不会产生 window 属性（词法绑定），
+      // 先从源码提取类名，追加导出语句在同一作用域内赋到 window.__omniSrc
+      const m = jsCode.match(/class\s+([A-Za-z_$][\w$]*)\s+extends\s+ComicSource/);
+      win.__omniSrc = null;
+      win.eval(jsCode + (m ? '\n;__omniSrc = (typeof ' + m[1] + ' !== "undefined") ? ' + m[1] + ' : null;' : ''));
       let source = null;
-      for (const k of Object.keys(win)) {
-        const v = win[k];
-        if (typeof v === 'function' && v.prototype && v.prototype instanceof win.ComicSource) { source = new v(); break; }
+      if (win.__omniSrc) {
+        try { source = new win.__omniSrc(); } catch (e0) { console.warn('图源实例化失败:', e0); }
+      }
+      if (!source) {
+        for (const k of Object.keys(win)) {
+          const v = win[k];
+          if (typeof v === 'function' && v.prototype && v.prototype instanceof win.ComicSource) { source = new v(); break; }
+        }
       }
       if (!source && win.ComicSource.sources) {
         const keys = Object.keys(win.ComicSource.sources);

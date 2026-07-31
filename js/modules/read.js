@@ -1760,6 +1760,7 @@ const ReadModule = (() => {
       Toast.show('已导入「' + (item.name || key) + '」');
       if (btn) { btn.textContent = '已导入'; btn.disabled = false; }
       renderReadSettings();
+      if (readView === 'profile') renderRead();  // 我的页书源数即时刷新
     } catch (e) {
       Toast.show('导入失败：' + (e.message || e), 'error');
       if (btn) { btn.disabled = false; btn.textContent = '重试'; }
