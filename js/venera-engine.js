@@ -259,9 +259,21 @@ const VeneraEngine = (() => {
     const pageData = src.explore[explorePage || 0];
     if (!pageData || !pageData.load) throw new Error('探索页不存在');
     const res = await pageData.load(page || 1);
-    return (res || []).map(c => ({
+    // 兼容三种返回：数组；multiPageComicList {comics, maxPage}；singlePageWithMultiPart {分区名: [comics]}
+    let list = [];
+    if (Array.isArray(res)) list = res;
+    else if (res && Array.isArray(res.comics)) list = res.comics;
+    else if (res && typeof res === 'object') {
+      Object.keys(res).forEach(function(k) {
+        if (Array.isArray(res[k])) {
+          res[k].forEach(function(c) { if (c && typeof c === 'object') c._part = k; });
+          list = list.concat(res[k]);
+        }
+      });
+    }
+    return list.map(c => ({
       id: c.id, name: c.title, author: c.subtitle || '',
-      cover: c.cover || '', tags: c.tags || [],
+      cover: c.cover || '', tags: (c.tags || []).concat(c._part ? [c._part] : []),
       description: c.description || '', stars: c.stars || 0,
       sourceKey: sourceKey, _venera: true
     }));

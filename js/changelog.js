@@ -539,7 +539,11 @@ const CHANGELOG = [
     '修复 Venera 官方图源装入失败的根因：eval 中 class 声明不产生全局属性，引擎找不到图源类导致发现页无标签/无法搜索；改为类名提取+同域导出实例化',
     'Venera 仓库导入后「我的」页书源数即时刷新'
   ]}
+  ,{ version: '8.6', date: '2026-07-31', changes: [
+    '修复 Venera 探索页三种返回格式兼容性：数组 / multiPageComicList {comics} / singlePageWithMultiPart {分区:列表} 全部支持，分区名并入标签（包子漫画等官方图源发现页可用）'
+  ]}
 ];
+
 
 
 
