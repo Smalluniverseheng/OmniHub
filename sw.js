@@ -1,4 +1,4 @@
-const VERSION = 'v8.7';
+const VERSION = 'v8.8';
 const CACHE_NAME = 'omnihub-' + VERSION;
 
 const ASSETS = [

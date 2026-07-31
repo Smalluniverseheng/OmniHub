@@ -405,6 +405,8 @@ const SB = (() => {
       }
       // 4) 对话记录拉回合并（按 id 比对 updatedAt，新者胜）
       try { if (await pullChatConversations()) changed = true; } catch (e) { console.warn('SB 对话拉取跳过:', e); }
+      // 5) App 书架拉回合并（安卓端收藏同步到网页书架）
+      try { if (await pullAppBookshelf()) changed = true; } catch (e) { console.warn('SB App 书架拉取跳过:', e); }
       Store.state.user.lastSyncAt = Date.now();
       saveLocal();
       // 同步结果即时反映到界面
@@ -429,19 +431,27 @@ const SB = (() => {
       return { ok: false, skipped: true };
     }
     const uid = Store.state.user.id;
-    const shelf = (Store.state.read.shelf || []).map(function(b) {
+    const now = nowIso();
+    // 通用同步表（module/key/value）：与安卓 App 共用，App 按 module='bookshelf' 拉取
+    const rows = (Store.state.read.shelf || []).map(function(b) {
       return {
-        id: b.id, title: b.title, author: b.author, cover: b.cover,
-        type: b.type, url: b.url, source: b.source,
-        chapterIdx: b.chapterIdx, pageIdx: b.pageIdx,
-        chapterName: b.chapterName, lastRead: b.lastRead
+        user_id: uid,
+        module: 'bookshelf',
+        key: 'web|' + (b.source || '') + '|' + (b.id || b.url || b.title),
+        value: {
+          kind: b.type === 'comic' ? 'comic' : 'novel',
+          title: b.title, author: b.author, cover: b.cover,
+          sourceKey: b.source || '', url: b.url || '',
+          chapterIdx: b.chapterIdx, pageIdx: b.pageIdx,
+          chapterName: b.chapterName, lastRead: b.lastRead,
+          platform: 'web'
+        },
+        updated_at: now
       };
     });
     try {
-      const r = await client.from('user_data').upsert(
-        { user_id: uid, key: 'read_shelf', data: shelf, updated_at: nowIso() },
-        { onConflict: 'user_id,key' }
-      );
+      if (!rows.length) return { ok: true, empty: true };
+      const r = await client.from('user_data').upsert(rows, { onConflict: 'user_id,module,key' });
       if (r.error) {
         console.warn('[SB] 书架推送失败（远端可能无 user_data 表），已仅本地保存:', r.error.message || r.error);
         return { ok: false, error: r.error };
@@ -453,7 +463,44 @@ const SB = (() => {
     }
   }
 
-  const Sync = { schedulePush: schedulePush, syncNow: syncNow, firstSync: firstSync, pushNow: pushNow, pushReadShelf: pushReadShelf };
+  /* 拉取 App 端同步上来的书架（platform='app'），合并进网页书架；
+   * 已存在（按 app|sourceKey|comicId 判重）则跳过；有新增返回 true */
+  async function pullAppBookshelf() {
+    if (!canSync() || !Store.state.user.cloudSync) return false;
+    try {
+      const r = await client.from('user_data').select('value')
+        .eq('user_id', Store.state.user.id).eq('module', 'bookshelf').limit(1000);
+      if (r.error || !Array.isArray(r.data)) return false;
+      const shelf = Store.state.read.shelf || (Store.state.read.shelf = []);
+      const exist = {};
+      shelf.forEach(function(b) { if (b && b.id) exist[b.id] = true; });
+      let changed = false;
+      r.data.forEach(function(row) {
+        const v = row.value;
+        if (!v || v._deleted === true || v.platform !== 'app') return;
+        const id = 'app|' + (v.sourceKey || '') + '|' + (v.comicId || '');
+        if (!v.comicId || exist[id]) return;
+        shelf.unshift({
+          id: id, title: v.title || '未命名', author: v.author || '',
+          cover: v.cover || '', type: 'comic-app', source: v.sourceKey || '',
+          url: '', chapterIdx: 0, pageIdx: 0, chapterName: '',
+          lastRead: v.time || '', fromApp: true
+        });
+        exist[id] = true;
+        changed = true;
+      });
+      if (changed) {
+        saveLocal();
+        console.log('[SB] 从 App 书架拉取合并完成');
+      }
+      return changed;
+    } catch (e) {
+      console.warn('[SB] App 书架拉取异常:', e);
+      return false;
+    }
+  }
+
+  const Sync = { schedulePush: schedulePush, syncNow: syncNow, firstSync: firstSync, pushNow: pushNow, pushReadShelf: pushReadShelf, pullAppBookshelf: pullAppBookshelf };
 
   /* ==================== 设备错误日志上报 ====================
    * 开关开启时把本地未上报日志 insert 到 error_logs 表；
@@ -524,8 +571,8 @@ const SB = (() => {
     try { payload = JSON.parse(JSON.stringify(convs)); } catch (e) { return { ok: false, error: e }; }
     try {
       const r = await client.from('user_data').upsert(
-        { user_id: Store.state.user.id, key: 'chat_conversations', data: payload, updated_at: nowIso() },
-        { onConflict: 'user_id,key' }
+        { user_id: Store.state.user.id, module: 'chat', key: 'conversations', value: { conversations: payload }, updated_at: nowIso() },
+        { onConflict: 'user_id,module,key' }
       );
       if (r.error) {
         console.warn('[SB] 对话推送失败（远端可能无 user_data 表）:', r.error.message || r.error);
@@ -539,10 +586,10 @@ const SB = (() => {
   /* 拉回云端对话并按 id/updatedAt 合并（新者胜）；有变更返回 true */
   async function pullChatConversations() {
     if (!canSync()) return false;
-    const r = await client.from('user_data').select('data')
-      .eq('user_id', Store.state.user.id).eq('key', 'chat_conversations').maybeSingle();
-    if (r.error || !r.data || !Array.isArray(r.data.data)) return false;
-    const remote = r.data.data;
+    const r = await client.from('user_data').select('value')
+      .eq('user_id', Store.state.user.id).eq('module', 'chat').eq('key', 'conversations').maybeSingle();
+    if (r.error || !r.data || !r.data.value || !Array.isArray(r.data.value.conversations)) return false;
+    const remote = r.data.value.conversations;
     const local = (Store.state.chat && Store.state.chat.conversations) || [];
     const map = {};
     let changed = false;
@@ -779,14 +826,14 @@ const SB = (() => {
       const r = await client.from('user_settings').select('settings').eq('user_id', uid).maybeSingle();
       if (!r.error && r.data && r.data.settings) remoteSettings = r.data.settings;
     } catch (e) {}
-    // user_data：本地可能有的 key（书架/对话） vs 远端 key 列表
+    // user_data：按 module 对比（bookshelf/chat）
     const localData = {};
-    if ((Store.state.read.shelf || []).length) localData.read_shelf = true;
-    if ((Store.state.chat.conversations || []).length) localData.chat_conversations = true;
+    if ((Store.state.read.shelf || []).length) localData.bookshelf = true;
+    if ((Store.state.chat.conversations || []).length) localData.chat = true;
     const remoteData = {};
     try {
-      const r = await client.from('user_data').select('key').eq('user_id', uid);
-      if (!r.error && Array.isArray(r.data)) r.data.forEach(function(row) { remoteData[row.key] = true; });
+      const r = await client.from('user_data').select('module').eq('user_id', uid);
+      if (!r.error && Array.isArray(r.data)) r.data.forEach(function(row) { remoteData[row.module] = true; });
     } catch (e) {}
     return {
       settings: diffCount(pickSettings(), remoteSettings),
