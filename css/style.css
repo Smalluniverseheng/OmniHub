@@ -295,8 +295,19 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 #readerFloat, #novelReaderFloat { position: fixed; right: 16px; bottom: 90px; display: flex; flex-direction: column; gap: 12px; z-index: 99; opacity: 0; transform: translateX(20px); transition: all 0.25s ease; pointer-events: none; }
 #readerFloat.open, #novelReaderFloat.open { opacity: 1; transform: translateX(0); pointer-events: auto; }
 .reader-float-btn { width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.reader-float-btn.active { border-color: #818cf8; color: #818cf8; background: rgba(99,102,241,0.18); }
 .reader-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 280px; max-width: 80vw; background: rgba(20,20,20,0.96); backdrop-filter: blur(16px); z-index: 101; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); display: flex; flex-direction: column; }
 .reader-panel.open { transform: translateX(0); }
+/* v9.0 按规划文档 6.3：目录面板从左侧滑入，设置面板为底部弹窗 */
+.reader-panel.from-left { right: auto; left: 0; transform: translateX(-100%); }
+.reader-panel.from-left.open { transform: translateX(0); }
+.reader-panel.sheet { top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-width: none; max-height: 70vh; border-radius: 16px 16px 0 0; transform: translateY(100%); }
+.reader-panel.sheet.open { transform: translateY(0); }
+/* 漫画阅读器亮度滑条弹层（悬浮工具钮左侧） */
+.reader-bri-pop { position: fixed; right: 72px; bottom: 132px; display: none; align-items: center; gap: 8px; background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.1); border-radius: 22px; padding: 10px 14px; z-index: 100; }
+.reader-bri-pop.open { display: flex; }
+.reader-bri-pop input[type="range"] { width: 140px; }
+.reader-bri-ico { font-size: 14px; }
 .reader-panel-head { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); color: #fff; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
 .reader-panel-close { background: none; border: none; color: #999; font-size: 20px; cursor: pointer; }
 #readerChapterList { flex: 1; overflow-y: auto; padding: 8px 0; }
@@ -586,6 +597,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .chat-quick-btn:disabled { opacity: 0.7; }
 .chat-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; animation: chatSpin 0.8s linear infinite; flex-shrink: 0; }
 @keyframes chatSpin { to { transform: rotate(360deg); } }
+/* 流式输出 reveal：新增字符 opacity 渐显（规划文档 3.8） */
+.chat-reveal { animation: chatReveal 0.3s ease both; }
+@keyframes chatReveal { from { opacity: 0; } to { opacity: 1; } }
 
 /* 分别配置折叠区 */
 .chat-manual { margin-bottom: 24px; }

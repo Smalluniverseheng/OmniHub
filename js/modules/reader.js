@@ -21,6 +21,10 @@ const Reader = (() => {
   // 触摸手势状态
   let touch = { x0: 0, y0: 0, dx: 0, active: false, pinching: false, dist0: 0, scale0: 1 };
 
+  const BRIGHTNESS_KEY = 'omnihub_comic_brightness';
+  let oriLock = 'auto';         // 方向锁定：auto | portrait | landscape
+  let fullscreenByUs = false;   // 方向锁定时由本模块发起的全屏，关闭时负责退出
+
   function el(id) { return document.getElementById(id); }
   function esc(s) { return (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function isGallery() { return state.mode.indexOf('gallery') === 0; }
@@ -61,6 +65,8 @@ const Reader = (() => {
     state.isZoomed = false;
 
     loadSettings();
+    applyBrightness();
+    updateOriBtn();
 
     const overlay = el('readerOverlay');
     if (overlay) {
@@ -77,6 +83,8 @@ const Reader = (() => {
     saveProgress(true);
     disconnectObservers();
     removeDots();
+    hideBriPop();
+    releaseOrientation();
     const overlay = el('readerOverlay');
     if (overlay) {
       overlay.classList.add('hidden');
@@ -380,9 +388,80 @@ const Reader = (() => {
     }
   }
 
+  /* ---------- 亮度调节（黑色遮罩方案，与小说阅读器一致） ---------- */
+  function getBrightness() {
+    const v = parseInt(localStorage.getItem(BRIGHTNESS_KEY), 10);
+    return (v >= 10 && v <= 100) ? v : 100;
+  }
+
+  function applyBrightness() {
+    const mask = el('readerBrightnessMask');
+    if (!mask) return;
+    mask.style.setProperty('--brightness', ((100 - getBrightness()) / 100).toFixed(2));
+    const slider = el('readerBrightness');
+    if (slider) slider.value = getBrightness();
+  }
+
+  function toggleBriPop() {
+    const pop = el('readerBriPop');
+    if (pop) pop.classList.toggle('open');
+  }
+
+  function hideBriPop() {
+    const pop = el('readerBriPop');
+    if (pop) pop.classList.remove('open');
+  }
+
+  /* ---------- 方向锁定：auto → 竖屏 → 横屏 → auto（需全屏配合，失败降级提示） ---------- */
+  function updateOriBtn() {
+    const btn = el('readerOriBtn');
+    if (!btn) return;
+    btn.textContent = oriLock === 'portrait' ? '↕' : oriLock === 'landscape' ? '↔' : '⟳';
+    btn.title = oriLock === 'portrait' ? '已锁定竖屏' : oriLock === 'landscape' ? '已锁定横屏' : '方向锁定';
+    btn.classList.toggle('active', oriLock !== 'auto');
+  }
+
+  async function cycleOrientation() {
+    const next = oriLock === 'auto' ? 'portrait' : oriLock === 'portrait' ? 'landscape' : 'auto';
+    if (next === 'auto') {
+      releaseOrientation();
+      if (window.Toast) Toast.show('已解除方向锁定');
+      return;
+    }
+    try {
+      if (!screen.orientation || typeof screen.orientation.lock !== 'function') throw new Error('unsupported');
+      const overlay = el('readerOverlay');
+      if (!document.fullscreenElement && overlay && overlay.requestFullscreen) {
+        await overlay.requestFullscreen();
+        fullscreenByUs = true;
+      }
+      await screen.orientation.lock(next);
+      oriLock = next;
+      if (window.Toast) Toast.show(next === 'portrait' ? '已锁定竖屏' : '已锁定横屏');
+    } catch (e) {
+      if (fullscreenByUs && document.fullscreenElement) {
+        try { document.exitFullscreen(); } catch (e2) {}
+        fullscreenByUs = false;
+      }
+      if (window.Toast) Toast.show('当前浏览器不支持方向锁定', 'error');
+    }
+    updateOriBtn();
+  }
+
+  function releaseOrientation() {
+    oriLock = 'auto';
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
+    if (fullscreenByUs && document.fullscreenElement) {
+      try { document.exitFullscreen(); } catch (e) {}
+    }
+    fullscreenByUs = false;
+    updateOriBtn();
+  }
+
   /* ---------- 工具栏 / 面板 ---------- */
   function toggleScaffold() {
     state.scaffoldOpen = !state.scaffoldOpen;
+    if (!state.scaffoldOpen) hideBriPop();
     updateScaffold();
   }
 
@@ -410,6 +489,7 @@ const Reader = (() => {
 
   function toggleChapterPanel() {
     state.chapterPanelOpen = !state.chapterPanelOpen;
+    if (state.chapterPanelOpen) hideBriPop();
     const panel = el('readerChapterPanel');
     if (panel) panel.classList.toggle('open', state.chapterPanelOpen);
     if (state.chapterPanelOpen) {
@@ -427,6 +507,7 @@ const Reader = (() => {
 
   function toggleSettingsPanel() {
     state.settingsPanelOpen = !state.settingsPanelOpen;
+    if (state.settingsPanelOpen) hideBriPop();
     const panel = el('readerSettingsPanel');
     if (panel) panel.classList.toggle('open', state.settingsPanelOpen);
   }
@@ -602,6 +683,20 @@ const Reader = (() => {
     if (chBtn) chBtn.addEventListener('click', toggleChapterPanel);
     if (setBtn) setBtn.addEventListener('click', toggleSettingsPanel);
 
+    // 亮度：弹层开关 + 滑条实时调节（持久化）
+    const briBtn = el('readerBriBtn');
+    if (briBtn) briBtn.addEventListener('click', toggleBriPop);
+    const briSlider = el('readerBrightness');
+    if (briSlider) briSlider.addEventListener('input', function() {
+      const v = Math.max(10, Math.min(100, parseInt(this.value, 10) || 100));
+      localStorage.setItem(BRIGHTNESS_KEY, String(v));
+      applyBrightness();
+    });
+
+    // 方向锁定
+    const oriBtn = el('readerOriBtn');
+    if (oriBtn) oriBtn.addEventListener('click', cycleOrientation);
+
     // 章节列表点击
     const chList = el('readerChapterList');
     if (chList) {
@@ -630,6 +725,8 @@ const Reader = (() => {
       content.addEventListener('click', function(e) {
         if (state.chapterPanelOpen) { toggleChapterPanel(); return; }
         if (state.settingsPanelOpen) { toggleSettingsPanel(); return; }
+        const bp = el('readerBriPop');
+        if (bp && bp.classList.contains('open')) { hideBriPop(); return; }
         if (touch.pinching || state.isZoomed) return;
         const w = window.innerWidth;
         const x = e.clientX;

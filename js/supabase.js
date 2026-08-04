@@ -96,6 +96,21 @@ const SB = (() => {
         const r = await client.auth.getSession();
         return (r.data && r.data.session) || null;
       } catch (e) { return null; }
+    },
+    /* 邮箱验证码（信任设备等敏感操作）：向已注册邮箱发送 6 位 OTP */
+    sendEmailOtp: async function(email) {
+      if (!ready()) return { ok: false, error: new Error('sdk not ready') };
+      try {
+        const r = await client.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false } });
+        return { ok: !r.error, error: r.error };
+      } catch (e) { return { ok: false, error: e }; }
+    },
+    verifyEmailOtp: async function(email, token) {
+      if (!ready()) return { ok: false, error: new Error('sdk not ready') };
+      try {
+        const r = await client.auth.verifyOtp({ email: email, token: String(token || '').trim(), type: 'email' });
+        return { ok: !r.error && !!(r.data && r.data.user), user: r.data && r.data.user, error: r.error };
+      } catch (e) { return { ok: false, error: e }; }
     }
   };
 

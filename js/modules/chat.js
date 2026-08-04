@@ -1033,7 +1033,7 @@ const ChatModule = (() => {
       }
       html += '</div>';
     }
-    html += renderContent(msg.content || '');
+    html += '<div class="chat-main-content">' + renderContent(msg.content || '') + '</div>';
     // 文本附件：气泡内可折叠代码块（max-height + opacity 动画）
     if (msg.files && msg.files.length) {
       for (var f = 0; f < msg.files.length; f++) {
@@ -1096,8 +1096,37 @@ const ChatModule = (() => {
     var bubble = el.querySelector('.chat-bubble');
     var content = el.querySelector('.chat-bubble-content');
     if (bubble) bubble.classList.toggle('chat-bubble-error', !!msg.error);
-    if (content) content.innerHTML = bubbleContentHtml(msg);
+    if (content) {
+      content.innerHTML = bubbleContentHtml(msg);
+      applyStreamReveal(content, msg);
+    }
     scrollBottom();
+  }
+
+  /* 流式 reveal 动画（规划文档 3.8）：整段重渲后，把本次新增的尾部字符
+     包进 span 做 opacity 0→1 渐显；思考/工具卡片不参与，只作用于正文 */
+  function applyStreamReveal(content, msg) {
+    var main = content.querySelector('.chat-main-content');
+    if (!msg.loading || !main) { delete content.dataset.revealLen; return; }
+    var nodes = [], total = 0, n;
+    var walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, null);
+    while ((n = walker.nextNode())) { nodes.push(n); total += n.nodeValue.length; }
+    var prev = parseInt(content.dataset.revealLen || '0', 10);
+    if (!(prev >= 0) || prev > total) prev = 0;
+    content.dataset.revealLen = String(total);
+    var delta = total - prev;
+    if (delta <= 0 || delta > 600) return;   // 首帧整段/超大 chunk 不做动画，避免闪烁
+    for (var i = nodes.length - 1; i >= 0 && delta > 0; i--) {
+      var node = nodes[i], len = node.nodeValue.length;
+      if (!len) continue;
+      var take = Math.min(len, delta);
+      var tail = node.splitText(len - take);
+      var span = document.createElement('span');
+      span.className = 'chat-reveal';
+      tail.parentNode.insertBefore(span, tail);
+      span.appendChild(tail);
+      delta -= take;
+    }
   }
 
   function scrollBottom() {

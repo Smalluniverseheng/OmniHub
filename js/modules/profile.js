@@ -936,7 +936,7 @@ const ProfileModule = (() => {
     html += '<div class="settings-group">';
     html += '<div class="settings-group-title">信任设备</div>';
     html += '<div class="settings-row">';
-    html += '<div class="settings-row-left"><div class="settings-row-icon">🛡️</div><div><div class="settings-row-text">信任本机</div><div class="settings-row-desc">开启需验证账号密码；邮箱认证由服务端发送，当前会话已完成验证</div></div></div>';
+    html += '<div class="settings-row-left"><div class="settings-row-icon">🛡️</div><div><div class="settings-row-text">信任本机</div><div class="settings-row-desc">开启需邮箱验证码认证；未收到邮件可改用账号密码验证</div></div></div>';
     html += '<div class="settings-row-right"><div class="toggle-switch ' + (trustedOn ? 'on' : '') + '" id="deviceTrustToggle"></div></div>';
     html += '</div></div>';
 
@@ -987,25 +987,39 @@ const ProfileModule = (() => {
   async function handleTrustToggle(toggle, on) {
     if (typeof SB === 'undefined' || !SB.Devices) { toggle.classList.toggle('on', !on); return; }
     if (on) {
-      // 开启：输入账号密码确认
-      var pwd = await askAccountPassword();
-      if (pwd === null) { toggle.classList.toggle('on', false); return; }
-      try {
-        var r = await SB.Auth.signIn(Store.state.user.email, pwd);
-        if (r.error || !r.user) {
-          Toast.show('账号密码错误', 'error');
-          toggle.classList.toggle('on', false);
-          return;
-        }
-        var sr = await SB.Devices.setTrusted(SB.Devices.currentId(), true);
-        if (sr && sr.ok) {
-          Toast.show('本机已设为信任设备（邮箱认证由服务端发送，当前会话已验证）');
+      // 开启：邮箱验证码认证优先（规划文档 7.2），发送失败/用户选择时降级为账号密码验证
+      var verified = false;
+      var email = Store.state.user.email || '';
+      if (email && SB.Auth.sendEmailOtp) {
+        var sent = await SB.Auth.sendEmailOtp(email);
+        if (sent && sent.ok) {
+          verified = await askEmailOtpAndVerify(email);
+          if (verified === null) { toggle.classList.toggle('on', false); return; }  // 取消
         } else {
-          Toast.show('设置失败：' + SB.errMsg(sr && sr.error), 'error');
+          Toast.show('验证邮件发送失败，改用密码验证', 'error');
+        }
+      }
+      if (!verified) {
+        // 降级：输入账号密码确认
+        var pwd = await askAccountPassword();
+        if (pwd === null) { toggle.classList.toggle('on', false); return; }
+        try {
+          var r = await SB.Auth.signIn(email, pwd);
+          if (r.error || !r.user) {
+            Toast.show('账号密码错误', 'error');
+            toggle.classList.toggle('on', false);
+            return;
+          }
+        } catch (e) {
           toggle.classList.toggle('on', false);
           return;
         }
-      } catch (e) {
+      }
+      var sr = await SB.Devices.setTrusted(SB.Devices.currentId(), true);
+      if (sr && sr.ok) {
+        Toast.show('本机已设为信任设备');
+      } else {
+        Toast.show('设置失败：' + SB.errMsg(sr && sr.error), 'error');
         toggle.classList.toggle('on', false);
         return;
       }
@@ -1016,6 +1030,52 @@ const ProfileModule = (() => {
       else toggle.classList.toggle('on', true);
     }
     renderDevices();
+  }
+
+  /* 邮箱验证码弹窗：验证成功 true / 改用密码 false / 取消 null */
+  function askEmailOtpAndVerify(email) {
+    return new Promise(function(resolve) {
+      var mask = document.createElement('div');
+      mask.className = 'auth2-mask';
+      var sheet = document.createElement('div');
+      sheet.className = 'auth2-sheet';
+      var html = '';
+      html += '<div class="auth2-title">邮箱认证</div>';
+      html += '<div class="auth2-desc">已向 ' + esc(email) + ' 发送验证邮件，请输入邮件中的 6 位验证码</div>';
+      html += '<div class="auth2-field"><input type="text" id="trustOtpInput" class="auth2-input" placeholder="6 位验证码" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></div>';
+      html += '<div class="auth2-error" id="trustOtpError"></div>';
+      html += '<div class="auth2-actions">';
+      html += '<button type="button" class="auth2-btn ghost" id="trustOtpCancel">取消</button>';
+      html += '<button type="button" class="auth2-btn ghost" id="trustOtpPwd">改用密码</button>';
+      html += '<button type="button" class="auth2-btn primary" id="trustOtpOk">验证</button>';
+      html += '</div>';
+      sheet.innerHTML = html;
+      document.body.appendChild(mask);
+      document.body.appendChild(sheet);
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { mask.classList.add('open'); sheet.classList.add('open'); });
+      });
+      function done(v) { mask.remove(); sheet.remove(); resolve(v); }
+      mask.addEventListener('click', function() { done(null); });
+      sheet.querySelector('#trustOtpCancel').addEventListener('click', function() { done(null); });
+      sheet.querySelector('#trustOtpPwd').addEventListener('click', function() { done(false); });
+      sheet.querySelector('#trustOtpOk').addEventListener('click', async function() {
+        var v = (sheet.querySelector('#trustOtpInput').value || '').trim();
+        var errBox = sheet.querySelector('#trustOtpError');
+        if (!/^\d{6}$/.test(v)) { errBox.textContent = '请输入 6 位数字验证码'; return; }
+        this.disabled = true;
+        this.textContent = '验证中…';
+        var r = await SB.Auth.verifyEmailOtp(email, v);
+        if (r && r.ok) { done(true); return; }
+        this.disabled = false;
+        this.textContent = '验证';
+        errBox.textContent = '验证码错误或已过期';
+      });
+      sheet.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sheet.querySelector('#trustOtpOk').click();
+      });
+      setTimeout(function() { sheet.querySelector('#trustOtpInput').focus(); }, 300);
+    });
   }
 
   /* 账号密码确认弹窗（信任设备流程）；取消返回 null */
