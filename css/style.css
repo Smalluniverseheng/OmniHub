@@ -781,6 +781,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 #novelReaderContent, .novel-page { transition: opacity .15s; }
 .novel-fade-out { opacity: 0 !important; }
 
+/* --- 小说阅读器：滚动模式章末自动续章（骨架屏 + 失败重试） --- */
+.novel-scroll-skeleton { padding: 26px 0 34px; }
+.novel-scroll-skeleton .nsk-tip { font-size: 12px; opacity: .45; margin-bottom: 14px; text-align: center; }
+.novel-scroll-skeleton .nsk-bar { height: 14px; border-radius: 7px; background: currentColor; margin-bottom: 12px; animation: novelSkelPulse 1.4s ease-in-out infinite; }
+@keyframes novelSkelPulse { 0%, 100% { opacity: .08; } 50% { opacity: .22; } }
+.novel-scroll-loaderr { padding: 22px 0 30px; text-align: center; font-size: 13px; opacity: .6; cursor: pointer; text-decoration: underline; }
+
 /* --- 书源导入：URL 行 / 进度环 / 文件导入 --- */
 .source-url-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .source-url-row input { flex: 1; padding: 10px 14px; border-radius: var(--radius); background: var(--bg-card); border: 1px solid var(--border); color: var(--text); font-size: 14px; outline: none; }

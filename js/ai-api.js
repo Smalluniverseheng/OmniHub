@@ -3,12 +3,23 @@
 const AIAPI = (() => {
   'use strict';
 
-  // 统一错误处理：HTTP 非 200 读出 body 文本截取 200 字抛错
+  // API 调用失败记入设备错误日志（App 未就绪时静默）
+  function logApiError(message, url) {
+    try {
+      if (typeof App !== 'undefined' && App.pushErrorLog) {
+        App.pushErrorLog({ message: 'API 请求失败: ' + message, stack: '', url: url || '' });
+      }
+    } catch (e) {}
+  }
+
+  // 统一错误处理：HTTP 非 200 读出 body 文本截取 200 字抛错（并记入设备错误日志）
   async function checkResponse(res) {
     if (!res.ok) {
       var text = '';
       try { text = await res.text(); } catch (e) { /* ignore */ }
-      throw new Error('HTTP ' + res.status + ': ' + (text || res.statusText || '请求失败').slice(0, 200));
+      var err = new Error('HTTP ' + res.status + ': ' + (text || res.statusText || '请求失败').slice(0, 200));
+      logApiError(err.message, res.url);
+      throw err;
     }
     return res;
   }
@@ -216,7 +227,10 @@ const AIAPI = (() => {
       if (watchdog) clearTimeout(watchdog);
     }
 
-    if (timedOut) throw new Error('响应超时：30 秒未收到数据');
+    if (timedOut) {
+      logApiError('响应超时：30 秒未收到数据', url);
+      throw new Error('响应超时：30 秒未收到数据');
+    }
     return { content: full, thinking: thinkingFull, usage: usage };
   }
 

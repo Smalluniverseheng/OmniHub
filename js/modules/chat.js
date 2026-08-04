@@ -1344,9 +1344,9 @@ const ChatModule = (() => {
     var msgs = [];
     if (c.systemPrompt) msgs.push({ role: 'system', content: c.systemPrompt });
 
-    // AI 识别设备日志：近 24h 前端错误注入系统上下文（前 3 条摘要）
+    // AI 识别设备日志（由「AI 对话辅助诊断」开关控制）：近 24h 前端错误注入系统上下文（前 3 条摘要）
     var st = Store.state;
-    if (st.settings && st.settings.errorLogEnabled && st.errorLog && st.errorLog.length) {
+    if (st.settings && st.settings.aiLogAssist && st.errorLog && st.errorLog.length) {
       var recent = [];
       var dayAgo = Date.now() - 24 * 3600 * 1000;
       for (var li = st.errorLog.length - 1; li >= 0 && recent.length < 3; li--) {
@@ -1356,7 +1356,12 @@ const ChatModule = (() => {
         var summaries = recent.map(function(l, i) {
           return (i + 1) + '. ' + String(l.message || '').slice(0, 200);
         });
-        msgs.push({ role: 'system', content: '用户近期遇到前端错误：' + summaries.join('；') });
+        msgs.push({ role: 'system', content: '用户近期遇到前端错误：' + summaries.join('；') + '。若与用户当前问题相关，请主动提示"检测到您之前遇到 [错误]"并给出诊断建议；无关则忽略。' });
+        // 每个会话仅提示一次，避免打扰
+        if (!conv._logAssistNoticed) {
+          conv._logAssistNoticed = true;
+          if (window.Toast) Toast.show('已附带近期错误日志供 AI 诊断（可在数据管理中关闭）');
+        }
       }
     }
 

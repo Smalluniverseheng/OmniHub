@@ -486,7 +486,7 @@ const App = (() => {
     });
   }
 
-  return { init, switchPage, openSub, closeSub, getCurrentPage: () => currentPage };
+  return { init, switchPage, openSub, closeSub, pushErrorLog, getCurrentPage: () => currentPage };
 })();
 
 document.addEventListener('DOMContentLoaded', function() { App.init(); });

@@ -70,7 +70,10 @@ const NovelReader = (() => {
     settings: null,
     readMap: {},
     frontEl: null,
-    pagerEl: null
+    pagerEl: null,
+    scrollLoadedUpTo: 0,      // 滚动模式：已追加到 DOM 的最后一章
+    scrollAppending: false,   // 滚动模式：续章加载中
+    scrollChapterParas: {}    // 滚动模式：各已载章节的段落缓存 { idx: paras }
   };
 
   var eventsBound = false;
@@ -297,8 +300,9 @@ const NovelReader = (() => {
     }
   }
 
-  async function fetchChapterParas(ch) {
-    var paras = [{ t: 'title', s: ch.name || ('第' + (state.currentChapter + 1) + '章') }];
+  async function fetchChapterParas(ch, idxForTitle) {
+    var num = (idxForTitle === undefined ? state.currentChapter : idxForTitle) + 1;
+    var paras = [{ t: 'title', s: ch.name || ('第' + num + '章') }];
     var hasImages = false;
 
     if (state.sourceType === 'venera' && typeof VeneraEngine !== 'undefined') {
@@ -430,21 +434,100 @@ const NovelReader = (() => {
     }
   }
 
-  function renderScroll(opts) {
-    var content = el('novelReaderContent');
-    cleanupPager();
-    content.classList.remove('paged');
+  function chapterParasHtml(paras) {
     var st = state.settings;
     var html = '';
-    state.paras.forEach(function(p) {
+    paras.forEach(function(p) {
       if (p.t === 'title') html += '<div class="chapter-title">' + esc(p.s) + '</div>';
       else if (p.t === 'img') html += '<img src="' + esc(p.s) + '" loading="lazy">';
       else html += '<p style="margin:0 0 ' + st.paraSpacing + 'px">' + esc(p.s) + '</p>';
     });
-    content.innerHTML = html;
+    return html;
+  }
+
+  function renderScroll(opts) {
+    var content = el('novelReaderContent');
+    cleanupPager();
+    content.classList.remove('paged');
+    content.innerHTML = '<div class="novel-scroll-chapter" data-ch="' + state.currentChapter + '">' + chapterParasHtml(state.paras) + '</div>';
     state.pages = [];
     state.currentPage = 0;
+    state.scrollLoadedUpTo = state.currentChapter;
+    state.scrollAppending = false;
+    state.scrollChapterParas = {};
+    state.scrollChapterParas[state.currentChapter] = state.paras;
     content.scrollTop = (opts && opts.scroll) ? parseInt(opts.scroll, 10) || 0 : 0;
+  }
+
+  /* 滚动模式：章节元素相对滚动容器的顶部偏移 */
+  function secTop(secEl, content) {
+    return secEl.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
+  }
+
+  /* 滚动模式：按滚动位置计算当前章节与章内偏移 */
+  function currentScrollPos() {
+    var content = el('novelReaderContent');
+    if (!content) return { ch: state.currentChapter, rel: 0 };
+    var secs = content.querySelectorAll('.novel-scroll-chapter');
+    if (!secs.length) return { ch: state.currentChapter, rel: content.scrollTop };
+    var mark = content.scrollTop + content.clientHeight * 0.3;
+    var cur = secs[0];
+    for (var i = 0; i < secs.length; i++) {
+      if (secTop(secs[i], content) <= mark) cur = secs[i];
+      else break;
+    }
+    var ch = parseInt(cur.dataset.ch, 10);
+    if (isNaN(ch)) ch = state.currentChapter;
+    return { ch: ch, rel: Math.max(0, content.scrollTop - secTop(cur, content)) };
+  }
+
+  /* 滚动跨越章节边界时同步当前章节状态 */
+  function syncScrollChapter() {
+    var pos = currentScrollPos();
+    if (pos.ch !== state.currentChapter) {
+      state.currentChapter = pos.ch;
+      state.readMap[pos.ch] = true;
+      if (state.scrollChapterParas[pos.ch]) state.paras = state.scrollChapterParas[pos.ch];
+      updateScaffold();
+    }
+  }
+
+  /* 滚动模式：滚到章末自动续载下一章，加载时底部显示脉冲骨架屏 */
+  async function autoAppendNextChapter() {
+    if (state.scrollAppending) return;
+    var next = state.scrollLoadedUpTo + 1;
+    if (next >= state.chapters.length) return;
+    var content = el('novelReaderContent');
+    if (!content) return;
+    state.scrollAppending = true;
+    var skel = document.createElement('div');
+    skel.className = 'novel-scroll-skeleton';
+    skel.innerHTML = '<div class="nsk-tip">正在加载下一章…</div>' +
+      '<div class="nsk-bar" style="width:92%"></div><div class="nsk-bar" style="width:100%"></div>' +
+      '<div class="nsk-bar" style="width:96%"></div><div class="nsk-bar" style="width:58%"></div>';
+    content.appendChild(skel);
+    try {
+      var result = await fetchChapterParas(state.chapters[next], next);
+      var wrap = document.createElement('div');
+      wrap.className = 'novel-scroll-chapter';
+      wrap.dataset.ch = String(next);
+      wrap.innerHTML = chapterParasHtml(result.paras);
+      content.replaceChild(wrap, skel);
+      state.scrollLoadedUpTo = next;
+      state.scrollChapterParas[next] = result.paras;
+      state.hasImages = state.hasImages || result.hasImages;
+      state.scrollAppending = false;
+      updateProgress();
+    } catch (e) {
+      skel.className = 'novel-scroll-loaderr';
+      skel.textContent = '下一章加载失败，点击重试';
+      skel.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        if (skel.parentNode) skel.parentNode.removeChild(skel);
+        state.scrollAppending = false;
+        autoAppendNextChapter();
+      });
+    }
   }
 
   function cleanupPager() {
@@ -676,7 +759,10 @@ const NovelReader = (() => {
   function relayout() {
     if (!state.paras.length) return;
     if (!isPaged()) {
-      renderScroll({ scroll: el('novelReaderContent') ? el('novelReaderContent').scrollTop : 0 });
+      var pos = currentScrollPos();
+      state.currentChapter = pos.ch;
+      if (state.scrollChapterParas[pos.ch]) state.paras = state.scrollChapterParas[pos.ch];
+      renderScroll({ scroll: pos.rel });
       applySettings();
       updateProgress();
       return;
@@ -698,6 +784,91 @@ const NovelReader = (() => {
   }
 
   /* ---------- 翻页 / 章节 ---------- */
+  /* slide 模式跟手拖拽状态 */
+  var slideDrag = { started: false, active: false, width: 0, dir: 0, boundary: false, inEl: null, lastX: 0, lastT: 0, vx: 0 };
+
+  function beginSlideDrag(dx) {
+    var pager = ensurePager();
+    slideDrag.width = pager.clientWidth || window.innerWidth;
+    slideDrag.dir = dx < 0 ? 1 : -1; // 1 = 下一页
+    var target = state.currentPage + slideDrag.dir;
+    slideDrag.boundary = target < 0 || target > state.pages.length - 1;
+    slideDrag.inEl = null;
+    if (!slideDrag.boundary) {
+      var inEl = document.createElement('div');
+      inEl.className = 'novel-page';
+      stylePage(inEl);
+      inEl.innerHTML = renderPageHtml(target);
+      inEl.style.transition = 'none';
+      inEl.style.transform = 'translateX(' + (slideDrag.dir > 0 ? slideDrag.width : -slideDrag.width) + 'px)';
+      pager.appendChild(inEl);
+      slideDrag.inEl = inEl;
+    }
+    state.frontEl.style.transition = 'none';
+    slideDrag.active = true;
+    state.animating = true;
+  }
+
+  function moveSlideDrag(dx) {
+    dx = slideDrag.dir > 0 ? Math.min(0, dx) : Math.max(0, dx);
+    if (slideDrag.boundary) dx = dx * 0.3; // 章节边界阻尼
+    state.frontEl.style.transform = 'translateX(' + dx + 'px)';
+    if (slideDrag.inEl) {
+      slideDrag.inEl.style.transform = 'translateX(' + (dx + (slideDrag.dir > 0 ? slideDrag.width : -slideDrag.width)) + 'px)';
+    }
+  }
+
+  function endSlideDrag(e) {
+    var t = e.changedTouches[0];
+    var dx = t.clientX - touchStartX;
+    dx = slideDrag.dir > 0 ? Math.min(0, dx) : Math.max(0, dx);
+    var w = slideDrag.width;
+    var dir = slideDrag.dir;
+    var flick = Math.abs(slideDrag.vx) > 0.35 && ((slideDrag.vx < 0) === (dir > 0));
+    var commit = !slideDrag.boundary && (Math.abs(dx) > w * 0.3 || flick);
+    var front = state.frontEl;
+    var inEl = slideDrag.inEl;
+    var target = state.currentPage + dir;
+    var ease = 'transform 0.22s cubic-bezier(0.22, 0.8, 0.32, 1)';
+    front.style.transition = ease;
+    if (inEl) inEl.style.transition = ease;
+
+    var finish = function(html) {
+      front.style.transition = '';
+      front.style.transform = '';
+      if (inEl && inEl.parentNode) inEl.parentNode.removeChild(inEl);
+      if (html !== undefined) { front.innerHTML = html; stylePage(front); }
+      state.animating = false;
+    };
+
+    if (commit) {
+      var html = renderPageHtml(target);
+      state.currentPage = target;
+      requestAnimationFrame(function() {
+        front.style.transform = 'translateX(' + (dir > 0 ? -w : w) + 'px)';
+        if (inEl) inEl.style.transform = 'translateX(0)';
+      });
+      setTimeout(function() {
+        finish(html);
+        updateProgress();
+        saveProgress();
+      }, 240);
+    } else {
+      var crossChapter = slideDrag.boundary && Math.abs(dx) > w * 0.25;
+      requestAnimationFrame(function() {
+        front.style.transform = 'translateX(0)';
+        if (inEl) inEl.style.transform = 'translateX(' + (dir > 0 ? w : -w) + 'px)';
+      });
+      setTimeout(function() {
+        finish();
+        if (crossChapter) { dir > 0 ? nextPage() : prevPage(); }
+      }, 240);
+    }
+    slideDrag.active = false;
+    slideDrag.started = false;
+    slideDrag.inEl = null;
+  }
+
   function nextPage() {
     if (!isPaged()) { nextChapter(); return; }
     if (state.animating) return;
@@ -788,7 +959,7 @@ const NovelReader = (() => {
       if (shelf[i].url === state.bookUrl) {
         shelf[i].chapterIdx = state.currentChapter;
         shelf[i].chapterName = state.chapters[state.currentChapter] ? state.chapters[state.currentChapter].name : '';
-        shelf[i].pageIdx = isPaged() ? state.currentPage : (el('novelReaderContent') ? el('novelReaderContent').scrollTop : 0);
+        shelf[i].pageIdx = isPaged() ? state.currentPage : currentScrollPos().rel;
         shelf[i].lastRead = Date.now();
         break;
       }
@@ -1123,18 +1294,45 @@ const NovelReader = (() => {
       }
     });
 
-    // 左右滑动手势翻页
+    // 左右滑动手势翻页（slide 模式跟手拖拽；其余模式松手判定）
     content.addEventListener('touchstart', function(e) {
       var t = e.touches[0];
       touchStartX = t.clientX;
       touchStartY = t.clientY;
       touchMoved = false;
+      slideDrag.started = false;
+      slideDrag.active = false;
+      if (isPaged() && state.settings.flipMode === 'slide' && !state.animating &&
+          !state.catalogOpen && !state.sheetOpen && e.touches.length === 1) {
+        slideDrag.started = true;
+        slideDrag.lastX = t.clientX;
+        slideDrag.lastT = e.timeStamp || Date.now();
+        slideDrag.vx = 0;
+      }
     }, { passive: true });
     content.addEventListener('touchmove', function(e) {
       var t = e.touches[0];
       if (Math.abs(t.clientX - touchStartX) > 10 || Math.abs(t.clientY - touchStartY) > 10) touchMoved = true;
+      if (!slideDrag.started) return;
+      var dx = t.clientX - touchStartX;
+      var dy = t.clientY - touchStartY;
+      if (!slideDrag.active) {
+        if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) beginSlideDrag(dx);
+        else if (Math.abs(dy) > 24) slideDrag.started = false;
+      }
+      if (slideDrag.active) {
+        var now = e.timeStamp || Date.now();
+        if (now > slideDrag.lastT) {
+          slideDrag.vx = (t.clientX - slideDrag.lastX) / (now - slideDrag.lastT);
+          slideDrag.lastX = t.clientX;
+          slideDrag.lastT = now;
+        }
+        moveSlideDrag(dx);
+      }
     }, { passive: true });
     content.addEventListener('touchend', function(e) {
+      if (slideDrag.active) { endSlideDrag(e); return; }
+      slideDrag.started = false;
       if (!isPaged() || state.catalogOpen || state.sheetOpen) return;
       var t = e.changedTouches[0];
       var dx = t.clientX - touchStartX;
@@ -1144,11 +1342,25 @@ const NovelReader = (() => {
         else prevPage();
       }
     }, { passive: true });
+    content.addEventListener('touchcancel', function() {
+      if (slideDrag.active) {
+        if (state.frontEl) { state.frontEl.style.transition = ''; state.frontEl.style.transform = ''; }
+        if (slideDrag.inEl && slideDrag.inEl.parentNode) slideDrag.inEl.parentNode.removeChild(slideDrag.inEl);
+        slideDrag.inEl = null;
+        slideDrag.active = false;
+        state.animating = false;
+      }
+      slideDrag.started = false;
+    }, { passive: true });
 
-    // 上下滚动模式：进度与位置记忆
+    // 上下滚动模式：进度与位置记忆 + 章末自动续载下一章
     content.addEventListener('scroll', function() {
       if (isPaged()) return;
+      syncScrollChapter();
       updateProgress();
+      if (content.scrollTop + content.clientHeight >= content.scrollHeight - content.clientHeight * 1.5) {
+        autoAppendNextChapter();
+      }
       if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
       scrollSaveTimer = setTimeout(saveProgress, 400);
     }, { passive: true });

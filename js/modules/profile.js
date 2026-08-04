@@ -634,14 +634,29 @@ const ProfileModule = (() => {
     });
   }
 
-  /* ---------- 升级动画：徽章弹跳 + 彩纸粒子 ---------- */
-  function playUpgradeAnimation() {
-    var badge = document.querySelector('#memberCenterBody .member-card-tier') ||
-                document.querySelector('#memberCenterBody .badge');
-    if (badge) {
-      badge.classList.add('levelup-pop');
-      setTimeout(function() { badge.classList.remove('levelup-pop'); }, 900);
-      spawnConfetti(badge);
+  /* ---------- 升级动画：进度条快速填满 → 重渲染新等级 → 徽章弹跳 + 彩纸粒子 ---------- */
+  function playUpgradeAnimation(rerender) {
+    var pop = function() {
+      var badge = document.querySelector('#memberCenterBody .member-card-tier') ||
+                  document.querySelector('#memberCenterBody .badge');
+      if (badge) {
+        badge.classList.add('levelup-pop');
+        setTimeout(function() { badge.classList.remove('levelup-pop'); }, 900);
+        spawnConfetti(badge);
+      }
+    };
+    var fill = document.querySelector('#memberCenterBody .level-progress-fill');
+    if (fill) {
+      fill.style.transition = 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+      void fill.offsetWidth;
+      fill.style.width = '100%';
+      setTimeout(function() {
+        if (typeof rerender === 'function') rerender();
+        pop();
+      }, 820);
+    } else {
+      if (typeof rerender === 'function') rerender();
+      pop();
     }
   }
 
@@ -943,6 +958,7 @@ const ProfileModule = (() => {
         html += '<span class="device-dot' + (d.is_online ? ' online' : '') + '"></span>';
         html += '<span>' + (d.is_online ? '在线' : '离线') + '</span>';
         html += '<span>· 最后活跃 ' + relTime(d.last_active) + '</span>';
+        if (d.location) html += '<span>· ' + esc(d.location) + '</span>';
         html += '<span>· IP ' + (d.ip ? esc(d.ip) : '--') + '</span>';
         html += '</div></div>';
         if (!d.is_current) {
@@ -1365,9 +1381,9 @@ const ProfileModule = (() => {
         if (!confirm(describeCard(v, key))) return;
         await SB.redeemCard(key);
         await SB.getMembership();   // 刷新会员信息
-        renderProfile();
         var newLv = levelOf(Store.state.user).lv;
-        if (newLv > prevLv) playUpgradeAnimation();   // 升级动画
+        if (newLv > prevLv) playUpgradeAnimation(renderProfile);   // 进度条填满 → 重渲染 → 徽章+彩纸
+        else renderProfile();
         Toast.show('已升级为 ' + tierOf(Store.state.user.role).name);
       } catch (e) {
         errEl.textContent = SB.errMsg(e);

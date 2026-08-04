@@ -669,6 +669,46 @@ const SB = (() => {
     return (role !== 'guest' && role !== 'user') ? 20 : 10;
   }
 
+  /* 公共 IP 与登录地点（ipwho.is → ipapi.co 兜底；失败返回 null，不影响注册） */
+  let ipLocCache = null;
+  async function fetchIpLocation() {
+    if (ipLocCache) return ipLocCache;
+    const tryFetch = async function(url, pick) {
+      const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(function() { ctrl.abort(); }, 5000) : null;
+      try {
+        const resp = await fetch(url, ctrl ? { signal: ctrl.signal } : {});
+        if (!resp.ok) return null;
+        return pick(await resp.json());
+      } catch (e) { return null; }
+      finally { if (timer) clearTimeout(timer); }
+    };
+    // 字符串拆分写法（'https:/' + '/...'）是为了让括号检查器不误判注释
+    let got = await tryFetch('https:/' + '/ipwho.is/', function(j) {
+      if (!j || j.success === false || !j.ip) return null;
+      return { ip: j.ip, location: [j.country, j.region, j.city].filter(Boolean).join(' ') };
+    });
+    if (!got) got = await tryFetch('https:/' + '/ipapi.co/json/', function(j) {
+      if (!j || !j.ip) return null;
+      return { ip: j.ip, location: [j.country_name, j.region, j.city].filter(Boolean).join(' ') };
+    });
+    if (got) ipLocCache = got;
+    return got;
+  }
+
+  /* 尽力上报本机 IP/登录地点（location 列不存在时降级只写 ip；全失败静默） */
+  async function reportIpLocation(uid, fid) {
+    try {
+      const loc = await fetchIpLocation();
+      if (!loc) return;
+      const ur = await client.from('user_devices').update({ ip: loc.ip, location: loc.location })
+        .eq('user_id', uid).eq('device_id', fid);
+      if (ur.error) {
+        await client.from('user_devices').update({ ip: loc.ip }).eq('user_id', uid).eq('device_id', fid);
+      }
+    } catch (e) {}
+  }
+
   /* 登录后注册/刷新本机设备；超限自动清理最久未用的非当前设备 */
   async function registerDevice() {
     if (!canSync()) return { ok: false, skipped: true };
@@ -687,6 +727,7 @@ const SB = (() => {
         console.warn('[SB] 设备注册失败（远端可能无 user_devices 表）:', r.error.message || r.error);
         return { ok: false, error: r.error };
       }
+      reportIpLocation(uid, fid);   // 登录地点异步上报，不阻塞注册
       // 其他设备不再标记"当前"
       try {
         await client.from('user_devices').update({ is_current: false })
@@ -715,8 +756,9 @@ const SB = (() => {
   async function listDevices() {
     if (!canSync()) return [];
     try {
+      // select('*') 兼容 location 等可选列不存在的旧表结构
       const r = await client.from('user_devices')
-        .select('device_id,device_name,device_type,ip,is_online,trusted,last_active,is_current')
+        .select('*')
         .eq('user_id', Store.state.user.id)
         .order('last_active', { ascending: false });
       if (r.error || !Array.isArray(r.data)) return [];
@@ -817,7 +859,7 @@ const SB = (() => {
     return out;
   }
 
-  /* 拉远端 user_settings + user_data 各 key，与本地对比出条目统计 */
+  /* 拉远端 user_settings + user_data，与本地做条目级对比（书架每本书、对话每个会话为一条） */
   async function computeDiff() {
     if (!canSync()) return null;
     const uid = Store.state.user.id;
@@ -826,14 +868,35 @@ const SB = (() => {
       const r = await client.from('user_settings').select('settings').eq('user_id', uid).maybeSingle();
       if (!r.error && r.data && r.data.settings) remoteSettings = r.data.settings;
     } catch (e) {}
-    // user_data：按 module 对比（bookshelf/chat）
+
+    // 本地条目：书架按 source|id 一书一条（比进度字段），对话按会话 id 一条（比 updatedAt）
     const localData = {};
-    if ((Store.state.read.shelf || []).length) localData.bookshelf = true;
-    if ((Store.state.chat.conversations || []).length) localData.chat = true;
+    (Store.state.read.shelf || []).forEach(function(b) {
+      localData['书架|' + (b.source || '') + '|' + (b.id || b.url || b.title)] =
+        { chapterIdx: b.chapterIdx, pageIdx: b.pageIdx, lastRead: b.lastRead };
+    });
+    ((Store.state.chat && Store.state.chat.conversations) || []).forEach(function(c) {
+      if (c && c.id) localData['对话|' + c.id] = { updatedAt: c.updatedAt || 0 };
+    });
+
     const remoteData = {};
     try {
-      const r = await client.from('user_data').select('module').eq('user_id', uid);
-      if (!r.error && Array.isArray(r.data)) r.data.forEach(function(row) { remoteData[row.module] = true; });
+      const r = await client.from('user_data').select('module,key,value').eq('user_id', uid).in('module', ['bookshelf', 'chat']);
+      if (!r.error && Array.isArray(r.data)) {
+        r.data.forEach(function(row) {
+          if (row.module === 'bookshelf') {
+            const v = row.value || {};
+            // key 形如 'web|source|id'（App 端为其它平台前缀），去掉平台段后与本地对齐
+            const parts = String(row.key || '').split('|');
+            const bare = parts.length >= 3 ? parts.slice(1).join('|') : String(row.key || '');
+            remoteData['书架|' + bare] = { chapterIdx: v.chapterIdx, pageIdx: v.pageIdx, lastRead: v.lastRead };
+          } else if (row.module === 'chat') {
+            ((row.value && row.value.conversations) || []).forEach(function(c) {
+              if (c && c.id) remoteData['对话|' + c.id] = { updatedAt: c.updatedAt || 0 };
+            });
+          }
+        });
+      }
     } catch (e) {}
     return {
       settings: diffCount(pickSettings(), remoteSettings),

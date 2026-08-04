@@ -645,12 +645,21 @@ const Reader = (() => {
       content.addEventListener('dblclick', function(e) {
         if (!isGallery()) return;
         state.isZoomed = !state.isZoomed;
-        state.zoomScale = state.isZoomed ? 2.5 : 1;
+        state.zoomScale = state.isZoomed ? 2 : 1;
         const img = galleryImg();
         if (img) {
           img.style.transition = '';
-          img.style.transform = state.isZoomed ? ('scale(' + state.zoomScale + ')') : '';
-          img.style.transformOrigin = 'center center';
+          if (state.isZoomed) {
+            // 聚焦双击点：以点击位置为缩放原点
+            const r = img.getBoundingClientRect();
+            const ox = Math.max(0, Math.min(100, ((e.clientX - r.left) / (r.width || 1)) * 100));
+            const oy = Math.max(0, Math.min(100, ((e.clientY - r.top) / (r.height || 1)) * 100));
+            img.style.transformOrigin = ox.toFixed(1) + '% ' + oy.toFixed(1) + '%';
+            img.style.transform = 'scale(' + state.zoomScale + ')';
+          } else {
+            img.style.transform = '';
+            img.style.transformOrigin = 'center center';
+          }
         }
       });
 

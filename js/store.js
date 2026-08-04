@@ -106,6 +106,7 @@ const Store = (() => {
       notifications: true,
       autoSync: false,
       errorLogEnabled: false,   // 设备日志自动上报开关
+      aiLogAssist: false,       // AI 对话辅助诊断：把近期错误日志附给 AI
       disclaimerAgreed: false   // 首次打开免责声明是否已同意
     }
   };
